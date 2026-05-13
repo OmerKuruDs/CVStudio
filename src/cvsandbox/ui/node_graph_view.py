@@ -22,11 +22,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -42,6 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from cvsandbox.core.graph import GraphEdge
 from cvsandbox.core.pipeline import Pipeline
 
 NODE_WIDTH = 150
@@ -100,6 +102,8 @@ class NodeItem(QGraphicsObject):
     remove_requested = Signal(int)
     moved = Signal()
     drag_released = Signal(int)
+    output_port_pressed = Signal(int, str)
+    input_port_pressed = Signal(int, str)
 
     def __init__(
         self,
@@ -107,6 +111,8 @@ class NodeItem(QGraphicsObject):
         title: str,
         category: str,
         enabled: bool,
+        input_ports: tuple[str, ...] = ("in",),
+        output_ports: tuple[str, ...] = ("out",),
         parent: QGraphicsItem | None = None,
     ) -> None:
         super().__init__(parent)
@@ -116,6 +122,8 @@ class NodeItem(QGraphicsObject):
         self.enabled = enabled
         self.timing: float | None = None
         self.selected = False
+        self.input_ports = input_ports
+        self.output_ports = output_ports
         self._color = _category_color(category)
         self._dragged = False
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -181,6 +189,14 @@ class NodeItem(QGraphicsObject):
             info_text,
         )
 
+        # Input ports on the left edge, output ports on the right edge.
+        painter.setBrush(QBrush(PORT_FILL))
+        painter.setPen(QPen(PORT_BORDER, 1.5))
+        for center in self._port_centers(self.input_ports, side="left"):
+            painter.drawEllipse(center, PORT_RADIUS, PORT_RADIUS)
+        for center in self._port_centers(self.output_ports, side="right"):
+            painter.drawEllipse(center, PORT_RADIUS, PORT_RADIUS)
+
         # Toggle chip (top-left within the body).
         toggle_center = self._toggle_chip_center()
         painter.setPen(QPen(QColor("#1d2129"), 1))
@@ -215,6 +231,54 @@ class NodeItem(QGraphicsObject):
         dy = point.y() - center.y()
         return dx * dx + dy * dy <= (CHIP_RADIUS + 2) ** 2
 
+    def _port_centers(self, ports: tuple[str, ...], *, side: str) -> list[QPointF]:
+        """Compute the (x, y) of each port circle in node-local coords."""
+        if not ports:
+            return []
+        x = -PORT_RADIUS if side == "left" else NODE_WIDTH + PORT_RADIUS
+        n = len(ports)
+        total = (n - 1) * PORT_GAP
+        first_y = NODE_HEIGHT / 2 - total / 2
+        return [QPointF(x, first_y + i * PORT_GAP) for i in range(n)]
+
+    def input_port_scene_position(self, port_name: str) -> QPointF:
+        """Scene-coords centre of the named input port. Useful for edge drawing."""
+        for name, center in zip(self.input_ports, self._port_centers(self.input_ports, side="left"), strict=True):
+            if name == port_name:
+                return self.mapToScene(center)
+        raise KeyError(port_name)
+
+    def output_port_scene_position(self, port_name: str) -> QPointF:
+        for name, center in zip(self.output_ports, self._port_centers(self.output_ports, side="right"), strict=True):
+            if name == port_name:
+                return self.mapToScene(center)
+        raise KeyError(port_name)
+
+    def _port_at_local(self, point: QPointF) -> tuple[str, str] | None:
+        """If `point` (in node-local coords) lands on a port circle, return
+        ('input' | 'output', port_name); else None."""
+        for name, center in zip(
+            self.input_ports,
+            self._port_centers(self.input_ports, side="left"),
+            strict=True,
+        ):
+            if self._hit_port(point, center):
+                return ("input", name)
+        for name, center in zip(
+            self.output_ports,
+            self._port_centers(self.output_ports, side="right"),
+            strict=True,
+        ):
+            if self._hit_port(point, center):
+                return ("output", name)
+        return None
+
+    @staticmethod
+    def _hit_port(point: QPointF, center: QPointF) -> bool:
+        dx = point.x() - center.x()
+        dy = point.y() - center.y()
+        return dx * dx + dy * dy <= (PORT_RADIUS + 3) ** 2
+
     # ------------------------------------------------------------------ events
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:  # noqa: N802
@@ -222,6 +286,15 @@ class NodeItem(QGraphicsObject):
             super().mousePressEvent(event)
             return
         pos = event.pos()
+        port = self._port_at_local(pos)
+        if port is not None:
+            side, port_name = port
+            if side == "output":
+                self.output_port_pressed.emit(self.index, port_name)
+            else:
+                self.input_port_pressed.emit(self.index, port_name)
+            event.accept()  # never start a node move when grabbing a port
+            return
         if self._hit_chip(pos, self._toggle_chip_center()):
             self.enabled = not self.enabled
             self.update()
@@ -255,12 +328,20 @@ class NodeItem(QGraphicsObject):
 
 
 class EdgeItem(QGraphicsPathItem):
-    """Bezier connector between two NodeItems, updated whenever either end moves."""
+    """Bezier connector between two NodeItems' typed ports."""
 
-    def __init__(self, source: NodeItem, target: NodeItem) -> None:
+    def __init__(
+        self,
+        source: NodeItem,
+        target: NodeItem,
+        source_port: str = "out",
+        target_port: str = "in",
+    ) -> None:
         super().__init__()
         self.source = source
         self.target = target
+        self.source_port = source_port
+        self.target_port = target_port
         self.setPen(QPen(EDGE_COLOR, EDGE_WIDTH))
         self.setZValue(-1)  # draw under nodes
         source.moved.connect(self.refresh)
@@ -268,8 +349,8 @@ class EdgeItem(QGraphicsPathItem):
         self.refresh()
 
     def refresh(self) -> None:
-        sp = self.source.pos() + QPointF(NODE_WIDTH, NODE_HEIGHT / 2)
-        tp = self.target.pos() + QPointF(0, NODE_HEIGHT / 2)
+        sp = self.source.output_port_scene_position(self.source_port)
+        tp = self.target.input_port_scene_position(self.target_port)
         dx = max(40, (tp.x() - sp.x()) / 2)
         c1 = QPointF(sp.x() + dx, sp.y())
         c2 = QPointF(tp.x() - dx, tp.y())
@@ -287,8 +368,11 @@ class NodeGraphView(QGraphicsView):
         self._pipeline = pipeline
         self._timings: list[float | None] = []
         self._nodes: list[NodeItem] = []
+        self._nodes_by_id: dict[str, NodeItem] = {}
         self._edges: list[EdgeItem] = []
         self._selected_index = -1
+        self._pending_source: tuple[NodeItem, str] | None = None
+        self._pending_wire: QGraphicsPathItem | None = None
 
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
@@ -308,22 +392,45 @@ class NodeGraphView(QGraphicsView):
         previous_selected = self._selected_index
         self._scene.clear()
         self._nodes.clear()
+        self._nodes_by_id.clear()
         self._edges.clear()
+        self._pending_wire = None  # was a child of scene — already gone
 
         for i, node in enumerate(self._pipeline.nodes):
-            item = NodeItem(i, node.spec.name, node.spec.category, node.enabled)
+            item = NodeItem(
+                index=i,
+                title=node.spec.name,
+                category=node.spec.category,
+                enabled=node.enabled,
+                input_ports=node.spec.input_ports,
+                output_ports=node.spec.output_ports,
+            )
             item.setPos(_layout_x(i), SCENE_MARGIN)
             item.timing = self._timings[i] if i < len(self._timings) else None
             self._scene.addItem(item)
             self._nodes.append(item)
+            self._nodes_by_id[node.id] = item
 
             item.body_clicked.connect(self._on_node_clicked)
             item.enable_toggled.connect(self._on_node_toggled)
             item.remove_requested.connect(self._on_node_remove_requested)
             item.drag_released.connect(self._on_node_drag_released)
+            item.output_port_pressed.connect(self._on_output_port_pressed)
+            item.input_port_pressed.connect(self._on_input_port_pressed)
 
-        for i in range(len(self._nodes) - 1):
-            edge = EdgeItem(self._nodes[i], self._nodes[i + 1])
+        # Render every edge that the underlying Graph currently holds — chain
+        # edges plus any user-drawn multi-input wires.
+        for graph_edge in self._pipeline.graph.edges:
+            src_item = self._nodes_by_id.get(graph_edge.source)
+            tgt_item = self._nodes_by_id.get(graph_edge.target)
+            if src_item is None or tgt_item is None:
+                continue
+            edge = EdgeItem(
+                src_item,
+                tgt_item,
+                source_port=graph_edge.source_port,
+                target_port=graph_edge.target_port,
+            )
             self._scene.addItem(edge)
             self._edges.append(edge)
 
@@ -412,3 +519,141 @@ class NodeGraphView(QGraphicsView):
     def _snap_to_layout(self) -> None:
         for i, item in enumerate(self._nodes):
             item.setPos(_layout_x(i), SCENE_MARGIN)
+
+    # ---------------------------------------------------------- drag-to-connect
+
+    def _on_output_port_pressed(self, index: int, port_name: str) -> None:
+        if not (0 <= index < len(self._nodes)):
+            return
+        self._begin_pending_edge(self._nodes[index], port_name)
+
+    def _on_input_port_pressed(self, index: int, port_name: str) -> None:
+        """Pressing on a connected input port lifts that edge — the pending
+        connection becomes anchored at the original source so the user can
+        re-target or release into empty space to detach."""
+        if not (0 <= index < len(self._nodes)):
+            return
+        target_id = self._pipeline.nodes[index].id
+        existing = next(
+            (
+                e
+                for e in self._pipeline.graph.edges
+                if e.target == target_id and e.target_port == port_name
+            ),
+            None,
+        )
+        if existing is None:
+            return
+        self._pipeline.graph.remove_edge(existing)
+        self.refresh()
+        self.pipeline_changed.emit()
+        # After refresh, the visible NodeItems are fresh instances — look up
+        # the source by node id rather than holding a stale reference.
+        new_source = self._nodes_by_id.get(existing.source)
+        if new_source is not None:
+            self._begin_pending_edge(new_source, existing.source_port)
+
+    def _begin_pending_edge(self, source: NodeItem, source_port: str) -> None:
+        self._pending_source = (source, source_port)
+        pen = QPen(EDGE_COLOR, EDGE_WIDTH, Qt.PenStyle.DashLine)
+        pen.setCosmetic(True)
+        wire = QGraphicsPathItem()
+        wire.setPen(pen)
+        wire.setZValue(10)
+        self._scene.addItem(wire)
+        self._pending_wire = wire
+        # Seed at the source port; mouseMoveEvent will keep it in sync.
+        start = source.output_port_scene_position(source_port)
+        self._update_pending_wire(start)
+
+    def _update_pending_wire(self, end_scene: QPointF) -> None:
+        if self._pending_source is None or self._pending_wire is None:
+            return
+        src, port = self._pending_source
+        sp = src.output_port_scene_position(port)
+        dx = max(40, (end_scene.x() - sp.x()) / 2)
+        c1 = QPointF(sp.x() + dx, sp.y())
+        c2 = QPointF(end_scene.x() - dx, end_scene.y())
+        path = QPainterPath(sp)
+        path.cubicTo(c1, c2, end_scene)
+        self._pending_wire.setPath(path)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt override)
+        if self._pending_source is not None:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            self._update_pending_wire(scene_pos)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 (Qt override)
+        if (
+            self._pending_source is not None
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._finalize_pending_edge(event.position())
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def _finalize_pending_edge(self, viewport_pos: QPointF) -> None:
+        assert self._pending_source is not None
+        source_item, source_port = self._pending_source
+        self._pending_source = None
+        if self._pending_wire is not None:
+            self._scene.removeItem(self._pending_wire)
+            self._pending_wire = None
+
+        # `viewport_pos` may be a QPoint or QPointF depending on the caller
+        # (real Qt events use QPointF; tests pass QPoint). Normalize.
+        point = (
+            viewport_pos.toPoint() if hasattr(viewport_pos, "toPoint") else viewport_pos
+        )
+        if not isinstance(point, QPoint):
+            point = QPoint(int(point.x()), int(point.y()))
+        scene_pos = self.mapToScene(point)
+        target = self._port_under_scene_pos(scene_pos)
+        if target is None:
+            return  # released over empty space → leave the source disconnected
+        target_item, target_port = target
+        if target_item is source_item:
+            return  # cannot wire a node back into itself
+
+        src_node = self._pipeline.nodes[source_item.index]
+        tgt_node = self._pipeline.nodes[target_item.index]
+        try:
+            self._pipeline.graph.add_edge(
+                GraphEdge(
+                    source=src_node.id,
+                    source_port=source_port,
+                    target=tgt_node.id,
+                    target_port=target_port,
+                )
+            )
+        except ValueError:
+            return  # cycle / duplicate / unknown port — silently reject
+        self.refresh()
+        self.pipeline_changed.emit()
+
+    def _port_under_scene_pos(
+        self, scene_pos: QPointF
+    ) -> tuple[NodeItem, str] | None:
+        """Find the input port (if any) at `scene_pos`. Walks the parent chain
+        of the hit item until a NodeItem is found, then asks it whether the
+        local position falls on a port circle."""
+        item = self._scene.itemAt(scene_pos, self.transform())
+        while item is not None and not isinstance(item, NodeItem):
+            item = item.parentItem()
+        if item is None:
+            # Fallback: search all node items by hit-testing each port.
+            for node_item in self._nodes:
+                local = node_item.mapFromScene(scene_pos)
+                port = node_item._port_at_local(local)
+                if port is not None and port[0] == "input":
+                    return node_item, port[1]
+            return None
+        local = item.mapFromScene(scene_pos)
+        port = item._port_at_local(local)
+        if port is None or port[0] != "input":
+            return None
+        return item, port[1]

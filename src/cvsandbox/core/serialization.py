@@ -24,7 +24,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from cvsandbox.core.pipeline import Pipeline, PipelineNode, Roi
+from cvsandbox.core.operation import OperationSpec
+from cvsandbox.core.pipeline import Pipeline, Roi
 from cvsandbox.core.registry import get_operation
 
 CURRENT_VERSION = 1
@@ -54,12 +55,21 @@ def from_dict(data: dict[str, Any], into: Pipeline) -> None:
     version = data.get("version")
     if version != CURRENT_VERSION:
         raise ValueError(f"Unsupported pipeline version: {version!r}")
-    new_nodes: list[PipelineNode] = []
+
+    # Phase 1: materialize everything into local state. Any failure here raises
+    # BEFORE we touch `into`, preserving the atomic-load guarantee.
+    materialized: list[tuple[OperationSpec, dict[str, Any], bool]] = []
     for raw in data.get("nodes", []):
         spec = get_operation(raw["id"])
-        node = PipelineNode(spec=spec, params=dict(raw.get("params", {})))
-        node.enabled = bool(raw.get("enabled", True))
-        new_nodes.append(node)
+        params = dict(raw.get("params", {}))
+        # Validate parameter shape now (would otherwise raise inside Pipeline.add).
+        unknown = set(params) - set(spec.default_params())
+        if unknown:
+            raise ValueError(
+                f"Unknown parameter(s) for {spec.id}: {sorted(unknown)}"
+            )
+        materialized.append((spec, params, bool(raw.get("enabled", True))))
+
     new_roi: Roi | None = None
     if "roi" in data and data["roi"] is not None:
         raw_roi = data["roi"]
@@ -73,7 +83,13 @@ def from_dict(data: dict[str, Any], into: Pipeline) -> None:
     if data.get("roi_paste_to") is not None:
         raw_paste = data["roi_paste_to"]
         new_paste = (int(raw_paste[0]), int(raw_paste[1]))
-    into.nodes[:] = new_nodes  # atomic swap once we know everything materialized
+
+    # Phase 2: commit. clear() drops nodes, edges, and ROI state in one shot;
+    # add() re-creates the chain so the underlying Graph stays consistent.
+    into.clear()
+    for spec, params, enabled in materialized:
+        node = into.add(spec, params)
+        node.enabled = enabled
     into.roi = new_roi
     into.roi_paste_to = new_paste
 

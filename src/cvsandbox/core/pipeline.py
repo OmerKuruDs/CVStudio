@@ -1,27 +1,32 @@
-"""Pipeline — ordered list of operations applied to an image.
+"""Pipeline — facade over a `Graph` that preserves the linear-chain API.
 
-A Pipeline holds a sequence of PipelineNodes. Each node binds an OperationSpec
-to a concrete set of parameter values. Executing the pipeline copies the input
-image once at the start, then folds each enabled node over it in order.
+Internally every pipeline is a DAG (see `core/graph.py`). The `Pipeline` class
+keeps a `_chain: list[NodeId]` describing the default linear sequence created
+by `Pipeline.add()`, and auto-manages the chain edges that connect consecutive
+chain nodes through `output_ports[0]` / `input_ports[0]`. The underlying
+`Graph` is exposed via `Pipeline.graph` so the UI can add or remove additional
+edges — for example feeding a `Blend` node's second input from an earlier
+node — without breaking the chain.
 
-The original image is never mutated. Disabled nodes are skipped without affecting
-downstream output.
+`Pipeline.execute` handles ROI cropping / splicing and delegates the actual
+node execution to `Graph.execute`, which does a topological sort and gathers
+inputs from incoming edges (falling back to the source image for unconnected
+input ports).
 
-Optionally a `Roi` can be set on the pipeline. When present, execute() crops the
-input to the ROI, runs the nodes on the crop, and splices the result back into
-a copy of the original image. If the steps change the crop's shape (e.g. a
-Resize op), the splice is skipped and the unchanged source is returned.
+`PipelineNode` is kept as an alias for `GraphNode` so older test code that
+constructs nodes directly still works.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import cv2
 import numpy as np
 
+from cvsandbox.core.graph import Graph, GraphEdge, GraphNode, NodeId
 from cvsandbox.core.operation import OperationSpec
 
 
@@ -110,73 +115,140 @@ class Roi:
         return Roi(x=x0, y=y0, width=x1 - x0, height=y1 - y0)
 
 
-@dataclass(slots=True)
-class PipelineNode:
-    spec: OperationSpec
-    params: dict[str, Any] = field(default_factory=dict)
-    enabled: bool = True
-
-    def __post_init__(self) -> None:
-        # Fill in defaults for unspecified params; reject unknown ones.
-        defaults = self.spec.default_params()
-        unknown = set(self.params) - set(defaults)
-        if unknown:
-            raise ValueError(f"Unknown parameter(s) for {self.spec.id}: {sorted(unknown)}")
-        for name, default in defaults.items():
-            self.params.setdefault(name, default)
-
-    def execute(self, image: np.ndarray) -> np.ndarray:
-        return self.spec.func(image, **self.params)
+PipelineNode = GraphNode
+"""Back-compat alias. The pipeline now uses GraphNode instances directly; tests
+that still write `PipelineNode(spec=X)` see the same construction surface."""
 
 
 class Pipeline:
     def __init__(self) -> None:
-        self._nodes: list[PipelineNode] = []
+        self._graph = Graph()
+        self._chain: list[NodeId] = []
         self.roi: Roi | None = None
         self.roi_paste_to: tuple[int, int] | None = None
         """When set together with `roi`, the processed crop is spliced into
         this (x, y) top-left coordinate instead of back at the ROI's own
         position. Ignored when `roi` is None."""
 
+    # ------------------------------------------------------------------ access
+
     @property
-    def nodes(self) -> list[PipelineNode]:
-        return self._nodes
+    def graph(self) -> Graph:
+        """The underlying DAG. UI code can add or remove edges directly here to
+        wire multi-input operations beyond the auto-managed chain."""
+        return self._graph
+
+    @property
+    def nodes(self) -> list[GraphNode]:
+        return [self._graph.get_node(nid) for nid in self._chain]
 
     def __len__(self) -> int:
-        return len(self._nodes)
+        return len(self._chain)
 
-    def add(self, spec: OperationSpec, params: dict[str, Any] | None = None) -> PipelineNode:
-        node = PipelineNode(spec=spec, params=dict(params) if params else {})
-        self._nodes.append(node)
+    # ------------------------------------------------------------------ mutate
+
+    def add(self, spec: OperationSpec, params: dict[str, Any] | None = None) -> GraphNode:
+        node = self._graph.add_node(spec, params=dict(params) if params else {})
+        if self._chain:
+            prev_id = self._chain[-1]
+            prev_spec = self._graph.get_node(prev_id).spec
+            self._graph.add_edge(
+                GraphEdge(
+                    source=prev_id,
+                    source_port=prev_spec.output_ports[0],
+                    target=node.id,
+                    target_port=spec.input_ports[0],
+                )
+            )
+        self._chain.append(node.id)
+        self._graph.output_node_id = node.id
         return node
 
-    def remove(self, index: int) -> PipelineNode:
-        return self._nodes.pop(index)
+    def remove(self, index: int) -> GraphNode:
+        if not (0 <= index < len(self._chain)):
+            raise IndexError(index)
+        node_id = self._chain.pop(index)
+        node = self._graph.get_node(node_id)
+        self._graph.remove_node(node_id)
+        self._rebuild_chain_edges()
+        return node
 
     def move(self, src: int, dst: int) -> None:
-        node = self._nodes.pop(src)
-        self._nodes.insert(dst, node)
+        nid = self._chain.pop(src)
+        self._chain.insert(dst, nid)
+        self._rebuild_chain_edges()
 
     def reorder(self, permutation: Sequence[int]) -> None:
-        """Permute the nodes in-place. `permutation` is the new ordering as
+        """Permute the chain in-place. `permutation` is the new ordering as
         old-index values — e.g. `[2, 0, 1]` says "what is now at position 0 used
         to be at index 2." Raises if it is not a valid permutation."""
-        n = len(self._nodes)
+        n = len(self._chain)
         order = list(permutation)
         if len(order) != n or sorted(order) != list(range(n)):
             raise ValueError(
                 f"reorder() expects a permutation of 0..{n - 1}, got {order!r}"
             )
-        self._nodes = [self._nodes[i] for i in order]
+        self._chain = [self._chain[i] for i in order]
+        self._rebuild_chain_edges()
 
     def clear(self) -> None:
-        self._nodes.clear()
+        self._graph.clear()
+        self._chain.clear()
         self.roi = None
         self.roi_paste_to = None
 
+    # ------------------------------------------------------------------ helpers
+
+    def _chain_edge(self, src: NodeId, tgt: NodeId) -> GraphEdge:
+        src_spec = self._graph.get_node(src).spec
+        tgt_spec = self._graph.get_node(tgt).spec
+        return GraphEdge(
+            source=src,
+            source_port=src_spec.output_ports[0],
+            target=tgt,
+            target_port=tgt_spec.input_ports[0],
+        )
+
+    def _rebuild_chain_edges(self) -> None:
+        """Drop every existing chain-pattern edge (any output_ports[0] →
+        input_ports[0] edge between two chain nodes) and re-create them from
+        the current `_chain` order. User-drawn edges on other ports survive."""
+        chain_ids = set(self._chain)
+        for edge in list(self._graph.edges):
+            if edge.source not in chain_ids or edge.target not in chain_ids:
+                continue
+            source_node = self._graph.get_node(edge.source)
+            target_node = self._graph.get_node(edge.target)
+            if (
+                edge.source_port == source_node.spec.output_ports[0]
+                and edge.target_port == target_node.spec.input_ports[0]
+            ):
+                self._graph.remove_edge(edge)
+
+        for i in range(len(self._chain) - 1):
+            chain_edge = self._chain_edge(self._chain[i], self._chain[i + 1])
+            try:
+                self._graph.add_edge(chain_edge)
+            except ValueError:
+                # Either a user wire holds the same input port, or adding the
+                # edge would create a cycle with an existing user edge. Drop
+                # the conflicting user edges so the chain can be restored.
+                conflicts = [
+                    e
+                    for e in self._graph.edges
+                    if e.target == chain_edge.target
+                    and e.target_port == chain_edge.target_port
+                ]
+                for e in conflicts:
+                    self._graph.remove_edge(e)
+                self._graph.add_edge(chain_edge)
+        self._graph.output_node_id = self._chain[-1] if self._chain else None
+
+    # ------------------------------------------------------------------ execute
+
     def execute(self, image: np.ndarray) -> np.ndarray:
         if self.roi is None:
-            return self._run_steps(image.copy())
+            return self._graph.execute(image.copy())
 
         clipped = self.roi.clipped_to(image.shape)
         if clipped is None:
@@ -186,11 +258,7 @@ class Pipeline:
             clipped.y : clipped.y + clipped.height,
             clipped.x : clipped.x + clipped.width,
         ].copy()
-        processed = self._run_steps(crop)
-        # Pipeline steps may change channel count (To Grayscale, HSV mask, Canny
-        # on a colour input, ...). Coerce back to the source's layout before
-        # splicing — otherwise the assignment raises and the whole ROI effect
-        # is silently lost.
+        processed = self._graph.execute(crop)
         processed = coerce_to_match(processed, image)
 
         dst_x, dst_y = (
@@ -198,24 +266,12 @@ class Pipeline:
         )
         result = image.copy()
         try:
-            paste = _fit_crop_to_destination(
-                processed, image.shape, dst_x, dst_y
-            )
+            paste = _fit_crop_to_destination(processed, image.shape, dst_x, dst_y)
             if paste is None:
                 return image.copy()
             patch, (px, py) = paste
             ph, pw = patch.shape[:2]
             result[py : py + ph, px : px + pw] = patch
         except (ValueError, TypeError):
-            # H/W mismatch or other splice failure (e.g. Resize op). Return
-            # the source untouched.
             return image.copy()
         return result
-
-    def _run_steps(self, image: np.ndarray) -> np.ndarray:
-        current = image
-        for node in self._nodes:
-            if not node.enabled:
-                continue
-            current = node.execute(current)
-        return current

@@ -15,6 +15,8 @@ multi-input ops, and dead-branch culling — they just have no UI yet.
 
 from __future__ import annotations
 
+import contextlib
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,6 +26,10 @@ import numpy as np
 from cvsandbox.core.operation import OperationSpec
 
 NodeId = str
+
+
+def _auto_node_id() -> NodeId:
+    return f"_n{uuid.uuid4().hex[:8]}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,8 +42,8 @@ class GraphEdge:
 
 @dataclass
 class GraphNode:
-    id: NodeId
     spec: OperationSpec
+    id: NodeId = field(default_factory=_auto_node_id)
     params: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
     position: tuple[float, float] = (0.0, 0.0)
@@ -119,10 +125,8 @@ class Graph:
             raise ValueError("adding this edge would create a cycle") from None
 
     def remove_edge(self, edge: GraphEdge) -> None:
-        try:
+        with contextlib.suppress(ValueError):
             self._edges.remove(edge)
-        except ValueError:
-            pass
 
     def clear(self) -> None:
         self._nodes.clear()
@@ -134,7 +138,7 @@ class Graph:
 
     def topological_order(self) -> list[NodeId]:
         """Kahn's algorithm. Raises ValueError if the graph has a cycle."""
-        incoming = {nid: 0 for nid in self._nodes}
+        incoming = dict.fromkeys(self._nodes, 0)
         adjacency: dict[NodeId, list[NodeId]] = {nid: [] for nid in self._nodes}
         for edge in self._edges:
             incoming[edge.target] += 1
@@ -178,7 +182,7 @@ class Graph:
             if not node.enabled:
                 # Pass-through: forward the first input on every output port.
                 fallback = input_args[0] if input_args else image
-                outputs[nid] = {p: fallback for p in node.spec.output_ports}
+                outputs[nid] = dict.fromkeys(node.spec.output_ports, fallback)
                 continue
 
             result = node.call(*input_args)

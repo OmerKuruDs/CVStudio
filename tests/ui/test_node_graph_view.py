@@ -194,3 +194,142 @@ def test_refresh_preserves_last_known_timings(view: NodeGraphView) -> None:
     view.refresh()
     assert view._nodes[0].timing == pytest.approx(0.001)
     assert view._nodes[2].timing == pytest.approx(0.003)
+
+
+# ----------------------------------------------------------------------- ports
+
+
+def test_default_node_shows_one_input_and_one_output_port(view: NodeGraphView) -> None:
+    node = view._nodes[0]
+    assert node.input_ports == ("in",)
+    assert node.output_ports == ("out",)
+
+
+def test_port_centres_sit_outside_the_node_body(view: NodeGraphView) -> None:
+    node = view._nodes[0]
+    inputs = node._port_centers(node.input_ports, side="left")
+    outputs = node._port_centers(node.output_ports, side="right")
+    assert inputs[0].x() < 0  # left of body
+    assert outputs[0].x() > NODE_WIDTH  # right of body
+
+
+def test_multi_input_node_stacks_ports_vertically(qapp: QApplication) -> None:
+    multi_spec = OperationSpec(
+        id="test.multi",
+        name="Blend",
+        category="Test",
+        description="",
+        parameters=(),
+        func=lambda a, b: a,
+        input_ports=("a", "b"),
+    )
+    pipeline = Pipeline()
+    pipeline.add(multi_spec)
+    widget = NodeGraphView(pipeline)
+    node = widget._nodes[0]
+    centres = node._port_centers(node.input_ports, side="left")
+    assert len(centres) == 2
+    assert centres[0].y() != centres[1].y()  # stacked, not overlapping
+
+
+def _multi_input_spec(name: str = "Blend") -> OperationSpec:
+    return OperationSpec(
+        id=f"test.{name.lower()}",
+        name=name,
+        category="Test",
+        description="",
+        parameters=(),
+        func=lambda a, b: a,
+        input_ports=("a", "b"),
+    )
+
+
+def test_chain_edges_render_from_underlying_graph(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    pipeline.add(_spec("test.c", "Gamma"))
+    widget = NodeGraphView(pipeline)
+    # Two chain edges (alpha→beta, beta→gamma); both render.
+    assert len(widget._edges) == 2
+
+
+def test_drag_to_connect_adds_edge_via_graph(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    alpha = pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    blend = pipeline.add(_multi_input_spec())
+    widget = NodeGraphView(pipeline)
+    # Sanity: blend's "a" port is chain-connected; "b" is not.
+    connected_b = [
+        e for e in pipeline.graph.edges if e.target == blend.id and e.target_port == "b"
+    ]
+    assert connected_b == []
+
+    fired: list[None] = []
+    widget.pipeline_changed.connect(lambda: fired.append(None))
+
+    # Simulate dragging from Alpha's output to Blend's "b" input.
+    src_item = widget._nodes_by_id[alpha.id]
+    widget._begin_pending_edge(src_item, "out")
+    target_scene = widget._nodes_by_id[blend.id].input_port_scene_position("b")
+    widget._finalize_pending_edge(
+        widget.mapFromScene(target_scene).toPointF()
+        if hasattr(widget.mapFromScene(target_scene), "toPointF")
+        else widget.mapFromScene(target_scene)
+    )
+    qapp.processEvents()
+
+    edges_to_b = [
+        e for e in pipeline.graph.edges if e.target == blend.id and e.target_port == "b"
+    ]
+    assert len(edges_to_b) == 1
+    assert edges_to_b[0].source == alpha.id
+    assert fired == [None]
+
+
+def test_drag_to_disconnect_drops_edge_when_released_in_empty_space(
+    qapp: QApplication,
+) -> None:
+    pipeline = Pipeline()
+    pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    widget = NodeGraphView(pipeline)
+    assert len(pipeline.graph.edges) == 1
+
+    fired: list[None] = []
+    widget.pipeline_changed.connect(lambda: fired.append(None))
+
+    # Press on Beta's "in" port (which is chain-connected) → existing edge is
+    # lifted. Then release in empty space → no new edge is created.
+    widget._on_input_port_pressed(1, "in")
+    widget._finalize_pending_edge(widget.mapFromScene(QPointF(10_000, 10_000)))
+    qapp.processEvents()
+    assert pipeline.graph.edges == []
+    # Each step that mutates the graph emits pipeline_changed.
+    assert fired
+
+
+def test_drag_to_connect_rejects_cycle(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    blend = pipeline.add(_multi_input_spec())
+    widget = NodeGraphView(pipeline)
+    edges_before = len(pipeline.graph.edges)
+    # Try to wire blend's output back into alpha — would form a cycle.
+    src_item = widget._nodes_by_id[blend.id]
+    widget._begin_pending_edge(src_item, "out")
+    alpha_in_scene = widget._nodes_by_id[pipeline.nodes[0].id].input_port_scene_position("in")
+    widget._finalize_pending_edge(widget.mapFromScene(alpha_in_scene))
+    qapp.processEvents()
+    assert len(pipeline.graph.edges) == edges_before
+
+
+def test_input_port_scene_position_looks_up_by_name(view: NodeGraphView) -> None:
+    node = view._nodes[0]
+    point = node.input_port_scene_position("in")
+    expected = node.mapToScene(node._port_centers(node.input_ports, side="left")[0])
+    assert point == expected
+    with pytest.raises(KeyError):
+        node.input_port_scene_position("bogus")

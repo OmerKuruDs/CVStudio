@@ -15,6 +15,7 @@ from cvsandbox.core.registry import register_operation
 from cvsandbox.operations import (
     analysis,
     color,
+    composite,
     edge,
     filtering,
     geometric,
@@ -22,7 +23,16 @@ from cvsandbox.operations import (
     threshold,
 )
 
-_BUILTIN_MODULES = (filtering, threshold, morphology, edge, color, geometric, analysis)
+_BUILTIN_MODULES = (
+    filtering,
+    threshold,
+    morphology,
+    edge,
+    color,
+    geometric,
+    analysis,
+    composite,
+)
 
 
 def all_builtin_specs() -> tuple[OperationSpec, ...]:

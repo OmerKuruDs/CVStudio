@@ -10,7 +10,7 @@
 [![PySide6](https://img.shields.io/badge/PySide6-6.6%2B-41CD52)](https://doc.qt.io/qtforpython/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.9%2B-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-180%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-217%20passing-success)](tests/)
 
 </div>
 
@@ -25,7 +25,7 @@ Built for engineers who currently iterate on `cv2.GaussianBlur(img, (5, 5), 0)` 
 ## Highlights
 
 - **Live preview** with a 120 ms debounced worker thread — no UI freezes on large images.
-- **24 built-in operations** across 7 categories (filtering, threshold, morphology, edge, color, geometric, analysis).
+- **27 built-in operations** across 8 categories (filtering, threshold, morphology, edge, color, geometric, analysis, composite).
 - **Auto-generated UI** — every slider, spinner, and dropdown is derived from a declarative `Parameter` spec. Adding an operation does not touch UI code.
 - **Pipeline persistence** — save and load pipelines as `.cvpipe.json`.
 - **Code export** — emit a stand-alone `process(img)` Python function whose output is verified equal to the live pipeline.
@@ -46,7 +46,7 @@ python -m venv .venv
 .venv\Scripts\activate              # Windows PowerShell
 # source .venv/bin/activate         # Linux / macOS
 pip install -e ".[dev]"
-pytest                              # 180 tests, all passing
+pytest                              # 217 tests, all passing
 cvsandbox                           # launch the GUI
 ```
 
@@ -65,7 +65,8 @@ src/cvsandbox/
 │   ├── pipeline.py        # Pipeline + PipelineNode
 │   ├── registry.py        # Global operation registry
 │   ├── codegen.py         # Pipeline → Python source generation
-│   └── serialization.py   # Load / save pipelines as JSON
+│   ├── serialization.py   # Load / save pipelines as JSON
+│   └── graph.py           # DAG data model + topological execution (Phase 2a)
 ├── operations/            # Built-in OpenCV operations (one module per category)
 ├── resources/             # Bundled assets (icon)
 └── ui/                    # PySide6 widgets
@@ -95,6 +96,7 @@ Each operation is a small declarative `OperationSpec`: an id, a parameter list, 
 | Color       | To Grayscale, To HSV, Invert, Extract Channel, CLAHE, HSV In-Range Mask |
 | Geometric   | Resize, Rotate, Flip                                                    |
 | Analysis    | Find Contours                                                           |
+| Composite   | Blend, Apply Mask, Difference (multi-input — wire the second input by dragging from any node's output port) |
 
 ## Adding a new operation
 
@@ -129,7 +131,9 @@ The catalog, parameter panel, and code exporter all pick up the new spec automat
 **v1.0 and beyond**
 - [x] ROI selection — pipeline operates only inside a user-drawn rectangle
 - [x] Node-graph pipeline view (visual layer; underlying model still linear)
-- [ ] True DAG semantics — multi-input ops, branching, merging
+- [x] DAG core (Phase 2a) — `Graph`, port-typed `GraphNode`/`GraphEdge`, Kahn topological execution; cycle detection; branching, merging, multi-input and multi-output ops all execute correctly. `OperationSpec` carries `input_ports` and `output_ports`. Built-in ops keep single-input / single-output defaults.
+- [x] DAG UI (Phase 2b) — `Pipeline` is now a thin facade over `Graph`; drag-to-connect wires an output port into any compatible input port; drag-to-disconnect lifts a connected wire so it can be re-routed or released to detach; cycles, duplicate connections, and unknown ports are silently rejected. Three new multi-input ops in the Composite category: Blend, Apply Mask, Difference.
+- [ ] Free node positioning + serialization v2 (save graph topology + node positions)
 - [ ] Video / camera input
 - [ ] Batch processing
 
