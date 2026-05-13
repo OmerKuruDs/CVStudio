@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/cvsandbox/resources/icon.svg" alt="cvsandbox" width="140" />
+<img src="src/cvsandbox/resources/icon.svg" alt="cvsandbox" width="280" />
 
 # cvsandbox
 
