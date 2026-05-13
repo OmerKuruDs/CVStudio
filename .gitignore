@@ -37,6 +37,5 @@ Thumbs.db
 *.cvpipe.json.bak
 sample_images/private/
 
-tests/
+# Claude Code local session state — must NOT be tracked
 .claude/
-.github/

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icon.svg" alt="cvsandbox" width="140" />
+<img src="src/cvsandbox/resources/icon.svg" alt="cvsandbox" width="140" />
 
 # cvsandbox
 
@@ -10,7 +10,7 @@
 [![PySide6](https://img.shields.io/badge/PySide6-6.6%2B-41CD52)](https://doc.qt.io/qtforpython/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.9%2B-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-119%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-129%20passing-success)](tests/)
 
 </div>
 
@@ -32,6 +32,7 @@ Built for engineers who currently iterate on `cv2.GaussianBlur(img, (5, 5), 0)` 
 - **Before / after compare** — toggle a side-by-side view to see exactly what the pipeline does (`Ctrl+B`).
 - **Histogram panel** — per-channel intensity overlay refreshes with every preview.
 - **Zoom & pan** — cursor-anchored mouse-wheel zoom, drag-to-pan, double-click to refit.
+- **Per-operation timing** — each pipeline row shows how long that step took on the last preview run.
 
 ## Quick start
 
@@ -42,7 +43,7 @@ python -m venv .venv
 .venv\Scripts\activate              # Windows PowerShell
 # source .venv/bin/activate         # Linux / macOS
 pip install -e ".[dev]"
-pytest                              # 119 tests, all passing
+pytest                              # 129 tests, all passing
 cvsandbox                           # launch the GUI
 ```
 
@@ -118,7 +119,7 @@ The catalog, parameter panel, and code exporter all pick up the new spec automat
 - [x] Code export to stand-alone Python
 - [x] Histogram panel
 - [x] Before / after split view
-- [ ] Per-operation timing HUD
+- [x] Per-operation timing HUD
 - [ ] Drag-and-drop pipeline reordering
 
 **v1.0 and beyond.** Node-based graph UI, ROI selection, video / camera input, batch processing.

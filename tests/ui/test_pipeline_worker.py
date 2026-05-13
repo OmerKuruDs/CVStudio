@@ -45,8 +45,10 @@ def _stop(thread: QThread) -> None:
 def test_worker_executes_steps_in_order(qapp: QApplication) -> None:
     worker, thread = _make_worker_on_thread()
     try:
-        received: list[tuple[int, np.ndarray]] = []
-        worker.result_ready.connect(lambda rid, img: received.append((rid, img)))
+        received: list[tuple[int, np.ndarray, tuple[float, ...]]] = []
+        worker.result_ready.connect(
+            lambda rid, img, timings: received.append((rid, img, timings))
+        )
 
         image = np.full((4, 4), 10, dtype=np.uint8)
         request = PipelineRequest(
@@ -59,6 +61,9 @@ def test_worker_executes_steps_in_order(qapp: QApplication) -> None:
 
         assert received[0][0] == 1
         assert int(received[0][1][0, 0]) == 22
+        timings = received[0][2]
+        assert len(timings) == 2
+        assert all(t >= 0 for t in timings)
     finally:
         _stop(thread)
 
@@ -86,15 +91,38 @@ def test_worker_emits_failed_on_exception(qapp: QApplication) -> None:
 def test_empty_pipeline_returns_a_copy(qapp: QApplication) -> None:
     worker, thread = _make_worker_on_thread()
     try:
-        received: list[np.ndarray] = []
-        worker.result_ready.connect(lambda _rid, img: received.append(img))
+        received: list[tuple[np.ndarray, tuple[float, ...]]] = []
+        worker.result_ready.connect(
+            lambda _rid, img, timings: received.append((img, timings))
+        )
 
         image = np.full((3, 3), 99, dtype=np.uint8)
         request = PipelineRequest(request_id=0, image=image, steps=())
         worker.execute(request)
         _wait_for(lambda: bool(received))
 
-        assert np.array_equal(received[0], image)
-        assert received[0] is not image
+        assert np.array_equal(received[0][0], image)
+        assert received[0][0] is not image
+        assert received[0][1] == ()
+    finally:
+        _stop(thread)
+
+
+def test_worker_per_step_timings_match_step_count(qapp: QApplication) -> None:
+    worker, thread = _make_worker_on_thread()
+    try:
+        received: list[tuple[float, ...]] = []
+        worker.result_ready.connect(lambda _rid, _img, timings: received.append(timings))
+
+        request = PipelineRequest(
+            request_id=7,
+            image=np.zeros((4, 4), dtype=np.uint8),
+            steps=((_add, {"value": 1}), (_add, {"value": 2}), (_add, {"value": 3})),
+        )
+        worker.execute(request)
+        _wait_for(lambda: bool(received))
+
+        assert len(received[0]) == 3
+        assert all(isinstance(t, float) and t >= 0 for t in received[0])
     finally:
         _stop(thread)

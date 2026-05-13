@@ -267,6 +267,7 @@ class MainWindow(QMainWindow):
         if self._source_image is None:
             self._image_view.set_image(None)
             self._histogram_panel.clear()
+            self._pipeline_view.clear_timings()
             return
         steps = tuple(
             (node.spec.func, dict(node.params)) for node in self._pipeline.nodes if node.enabled
@@ -280,13 +281,27 @@ class MainWindow(QMainWindow):
         )
         self._execute_requested.emit(request)
 
-    def _on_worker_result(self, request_id: int, image: object) -> None:
+    def _on_worker_result(self, request_id: int, image: object, timings: object) -> None:
         if request_id != self._latest_request_id:
             return  # a newer request has already superseded this one
         if not isinstance(image, np.ndarray):
             return
         self._image_view.set_image(image)
         self._histogram_panel.set_image(image)
+        self._apply_timings(timings)
+
+    def _apply_timings(self, timings: object) -> None:
+        """Map an enabled-only timings tuple back to per-pipeline-node timings."""
+        if not isinstance(timings, tuple):
+            return
+        per_node: list[float | None] = []
+        iterator = iter(timings)
+        for node in self._pipeline.nodes:
+            if node.enabled:
+                per_node.append(next(iterator, None))
+            else:
+                per_node.append(None)
+        self._pipeline_view.set_timings(per_node)
 
     def _on_worker_failed(self, request_id: int, message: str) -> None:
         if request_id != self._latest_request_id:
