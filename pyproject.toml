@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cvsandbox"
+version = "0.1.0"
+description = "Interactive OpenCV playground — chain image processing operations with live preview."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+authors = [{ name = "Ömer Kuru" }]
+keywords = ["opencv", "image-processing", "gui", "sandbox", "playground"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "PySide6>=6.6",
+    "opencv-python>=4.9",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pre-commit>=3.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/OmerKuru/cvsandbox"
+Issues = "https://github.com/OmerKuru/cvsandbox/issues"
+
+[project.scripts]
+cvsandbox = "cvsandbox.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cvsandbox"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "N", "C4", "PIE"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["N802"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]
