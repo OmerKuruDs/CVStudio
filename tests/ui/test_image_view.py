@@ -6,7 +6,13 @@ from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.image_view import MAX_ZOOM, ZOOM_STEP, ImageViewWidget
+from cvsandbox.ui.image_view import (
+    MAX_ZOOM,
+    SEPARATOR_WIDTH,
+    ZOOM_STEP,
+    ImageViewWidget,
+    _compose_side_by_side,
+)
 
 
 def _rgb(w: int = 200, h: int = 100) -> np.ndarray:
@@ -122,3 +128,73 @@ def test_clear_resets_state(view: ImageViewWidget) -> None:
     assert view._pixmap_item is None
     assert view._image_size is None
     assert view._user_zoomed is False
+
+
+# --------------------------------------------------------------- split mode (side-by-side)
+
+
+def _solid(color: tuple[int, int, int], w: int = 100, h: int = 60) -> np.ndarray:
+    img = np.zeros((h, w, 3), dtype=np.uint8)
+    img[..., :] = color
+    return img
+
+
+def test_side_by_side_widths_add_up_plus_separator() -> None:
+    before = _solid((10, 10, 10), w=100, h=60)
+    after = _solid((200, 200, 200), w=100, h=60)
+    out = _compose_side_by_side(before, after)
+    assert out.shape == (60, 100 + SEPARATOR_WIDTH + 100, 3)
+
+
+def test_side_by_side_left_half_is_before_right_half_is_after() -> None:
+    before = _solid((10, 10, 10))
+    after = _solid((200, 200, 200))
+    out = _compose_side_by_side(before, after)
+    assert out[0, 0, 0] == 10  # leftmost = before
+    assert out[0, -1, 0] == 200  # rightmost = after
+
+
+def test_side_by_side_normalizes_height_to_after() -> None:
+    after = _solid((50, 50, 50), w=80, h=40)
+    before = _solid((10, 10, 10), w=200, h=120)  # taller and wider
+    out = _compose_side_by_side(before, after)
+    # Output height matches after's height. Width = scaled_before_w + sep + after_w.
+    assert out.shape[0] == 40
+    scaled_before_w = round(200 * (40 / 120))
+    assert out.shape[1] == scaled_before_w + SEPARATOR_WIDTH + 80
+
+
+def test_side_by_side_promotes_grayscale_before_to_bgr() -> None:
+    after = _solid((100, 100, 100))
+    before_gray = np.full((60, 100), 5, dtype=np.uint8)
+    out = _compose_side_by_side(before_gray, after)
+    assert out.ndim == 3
+    assert out.shape[2] == 3
+    assert out[0, 0, 0] == 5  # gray got promoted to BGR
+
+
+def test_side_by_side_returns_after_when_before_is_none() -> None:
+    after = _solid((200, 200, 200))
+    out = _compose_side_by_side(None, after)
+    assert out is after
+
+
+def test_split_mode_off_renders_after_only(view: ImageViewWidget) -> None:
+    view.set_before(_solid((0, 0, 0)))
+    view.set_image(_solid((200, 200, 200)))
+    assert view.is_split_enabled() is False
+    assert view._image_size == (100, 60)  # not doubled
+
+
+def test_enabling_split_with_both_images_widens_canvas(view: ImageViewWidget) -> None:
+    view.set_before(_solid((0, 0, 0)))
+    view.set_image(_solid((200, 200, 200)))
+    view.set_split_enabled(True)
+    assert view._is_split_active()
+    assert view._image_size == (100 + SEPARATOR_WIDTH + 100, 60)
+
+
+def test_enabling_split_without_before_is_inert(view: ImageViewWidget) -> None:
+    view.set_image(_solid((200, 200, 200)))  # no set_before
+    view.set_split_enabled(True)
+    assert view._is_split_active() is False

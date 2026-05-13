@@ -36,3 +36,7 @@ Thumbs.db
 # Project
 *.cvpipe.json.bak
 sample_images/private/
+
+tests/
+.claude/
+.github/

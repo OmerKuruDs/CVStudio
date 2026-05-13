@@ -53,7 +53,17 @@
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 20)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m mypy src 2>&1)",
       "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m cvsandbox --list 2>&1)",
-      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 25)"
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 25)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/ui/test_image_view.py --tb=short 2>&1 | Select-Object -Last 20)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/ui/test_image_view.py --tb=short 2>&1 | Select-Object -Last 25)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 5; .\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m mypy src 2>&1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/ui/test_image_view.py --tb=short 2>&1 | Select-Object -Last 5)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 8; .\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m mypy src 2>&1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 5)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 25; .\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m mypy src 2>&1)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m mypy src 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m pytest --tb=short 2>&1 | Select-Object -Last 5)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"from cvsandbox.resources import ICON_PATH; print\\('exists:', ICON_PATH.exists\\(\\)\\); from PySide6.QtWidgets import QApplication; import sys; app = QApplication\\(sys.argv\\); from PySide6.QtGui import QIcon; icon = QIcon\\(str\\(ICON_PATH\\)\\); print\\('null:', icon.isNull\\(\\)\\); print\\('sizes:', [\\(s.width\\(\\), s.height\\(\\)\\) for s in icon.availableSizes\\(\\)]\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src tests 2>&1; .\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/test_resources.py --tb=short 2>&1 | Select-Object -Last 5)"
     ]
   }
 }

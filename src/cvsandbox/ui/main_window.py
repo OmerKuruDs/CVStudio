@@ -23,8 +23,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QThread, QTimer, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
     QMainWindow,
@@ -40,7 +40,9 @@ from cvsandbox.core.pipeline import Pipeline
 from cvsandbox.core.registry import get_operation
 from cvsandbox.core.serialization import load as load_pipeline
 from cvsandbox.core.serialization import save as save_pipeline
+from cvsandbox.resources import ICON_PATH
 from cvsandbox.ui.code_export_dialog import CodeExportDialog
+from cvsandbox.ui.histogram_panel import HistogramPanel
 from cvsandbox.ui.image_view import ImageViewWidget
 from cvsandbox.ui.operation_catalog import OperationCatalog
 from cvsandbox.ui.parameter_panel import ParameterPanel
@@ -56,6 +58,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("cvsandbox")
+        self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.resize(1200, 800)
 
         self._source_image: np.ndarray | None = None
@@ -66,12 +69,19 @@ class MainWindow(QMainWindow):
         self._image_view = ImageViewWidget(self)
         self._catalog = OperationCatalog(self)
         self._param_panel = ParameterPanel(self)
+        self._histogram_panel = HistogramPanel(self)
         self._pipeline_view = PipelineView(self._pipeline, self)
+
+        right_splitter = QSplitter(Qt.Orientation.Vertical, self)
+        right_splitter.addWidget(self._param_panel)
+        right_splitter.addWidget(self._histogram_panel)
+        right_splitter.setStretchFactor(0, 3)
+        right_splitter.setStretchFactor(1, 1)
 
         right_panel = QWidget(self)
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(self._param_panel)
+        right_layout.addWidget(right_splitter)
 
         top_splitter = QSplitter(self)
         top_splitter.addWidget(self._catalog)
@@ -94,6 +104,10 @@ class MainWindow(QMainWindow):
         self._wire_signals()
 
     def _build_menu(self) -> None:
+        self._build_file_menu()
+        self._build_view_menu()
+
+    def _build_file_menu(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
 
         open_image_action = QAction("&Open Image…", self)
@@ -131,6 +145,15 @@ class MainWindow(QMainWindow):
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
+    def _build_view_menu(self) -> None:
+        view_menu = self.menuBar().addMenu("&View")
+
+        self._split_action = QAction("Split: &Before/After", self)
+        self._split_action.setCheckable(True)
+        self._split_action.setShortcut("Ctrl+B")
+        self._split_action.toggled.connect(self._image_view.set_split_enabled)
+        view_menu.addAction(self._split_action)
+
     def _setup_worker(self) -> None:
         self._worker_thread = QThread(self)
         self._worker = PipelineWorker()
@@ -166,6 +189,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Open failed", f"Could not read image: {path}")
             return
         self._source_image = image
+        self._image_view.set_before(image)
         self.statusBar().showMessage(f"Loaded {path}  ·  {image.shape}")
         self._request_preview()
 
@@ -242,6 +266,7 @@ class MainWindow(QMainWindow):
     def _dispatch_preview(self) -> None:
         if self._source_image is None:
             self._image_view.set_image(None)
+            self._histogram_panel.clear()
             return
         steps = tuple(
             (node.spec.func, dict(node.params)) for node in self._pipeline.nodes if node.enabled
@@ -261,6 +286,7 @@ class MainWindow(QMainWindow):
         if not isinstance(image, np.ndarray):
             return
         self._image_view.set_image(image)
+        self._histogram_panel.set_image(image)
 
     def _on_worker_failed(self, request_id: int, message: str) -> None:
         if request_id != self._latest_request_id:
