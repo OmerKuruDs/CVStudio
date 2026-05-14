@@ -27,6 +27,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
+    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QMainWindow,
@@ -59,6 +60,7 @@ from cvsandbox.ui.operation_catalog import OperationCatalog
 from cvsandbox.ui.parameter_panel import ParameterPanel
 from cvsandbox.ui.pipeline_worker import PipelineRequest, PipelineWorker
 from cvsandbox.ui.video_feed_controller import VideoFeedController
+from cvsandbox.ui.visualization_panel import VisualizationPanel
 
 DEBOUNCE_MS = 120
 PREVIEW_MAX_DIM = 1600  # longest-side cap for downscaled-preview mode
@@ -190,6 +192,19 @@ class MainWindow(QMainWindow):
         self._help_dialog: HelpDialog | None = None
 
         self.setStatusBar(QStatusBar(self))
+
+        # Visualization dock — sits on the right; toggleable from the View menu.
+        # Default hidden so first-run users see the familiar Editor layout.
+        self._viz_panel = VisualizationPanel(self)
+        self._viz_dock = QDockWidget("Visualization", self)
+        self._viz_dock.setObjectName("VisualizationDock")
+        self._viz_dock.setWidget(self._viz_panel)
+        self._viz_dock.setAllowedAreas(
+            Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
+        )
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._viz_dock)
+        self._viz_dock.hide()
+
         self._build_menu()
         self._tools_panel = ImageToolsPanel(
             split_action=self._split_action,
@@ -358,6 +373,16 @@ class MainWindow(QMainWindow):
         self._clear_paste_action = QAction("Clear &paste destination", self)
         self._clear_paste_action.triggered.connect(self._on_clear_paste)
         view_menu.addAction(self._clear_paste_action)
+
+        view_menu.addSeparator()
+
+        # Use the dock's own toggle so visibility, label, and checked-state
+        # stay in sync regardless of how the user closes the dock (X button,
+        # menu toggle, restored layout).
+        toggle_viz = self._viz_dock.toggleViewAction()
+        toggle_viz.setText("&Visualization panel")
+        toggle_viz.setShortcut("Ctrl+Shift+V")
+        view_menu.addAction(toggle_viz)
 
     def _setup_worker(self) -> None:
         self._worker_thread = QThread(self)
@@ -788,6 +813,7 @@ class MainWindow(QMainWindow):
         if self._preview_source is None:
             self._image_view.set_image(None)
             self._histogram_panel.clear()
+            self._viz_panel.clear()
             self._pipeline_view.clear_timings()
             return
         steps = tuple(
@@ -811,6 +837,7 @@ class MainWindow(QMainWindow):
             return
         self._image_view.set_image(image)
         self._histogram_panel.set_image(image)
+        self._viz_panel.set_image(image)
         self._apply_timings(timings)
         if self._recorder is not None and self._video_controller.is_active():
             try:
