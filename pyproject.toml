@@ -38,6 +38,15 @@ dev = [
     "pytest-cov>=5.0",
     "pre-commit>=3.7",
 ]
+# HuggingFace-backed AI operations (CLIP zero-shot classify, future
+# OWL-ViT detection, BLIP captioning, ...). Heavyweight (~5GB on disk
+# once torch is installed), so kept opt-in. Install with:
+#   pip install -e .[ai]
+ai = [
+    "transformers>=4.40",
+    "torch>=2.0",
+    "pillow>=10.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/OmerKuru/cvsandbox"

@@ -22,6 +22,12 @@ def run(argv: Sequence[str] | None = None) -> int:
     load_builtin_operations()
     _apply_windows_app_id()
     app = QApplication(list(argv) if argv is not None else sys.argv)
+    # Org + app names feed both QStandardPaths (used by the AI cache
+    # storage) and QSettings (window geometry / splitter sizes). Set
+    # them BEFORE creating MainWindow so the first cache load uses the
+    # right per-OS directory.
+    app.setOrganizationName("cvsandbox")
+    app.setOrganizationDomain("cvsandbox.local")
     app.setApplicationName("cvsandbox")
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     if THEME_QSS_PATH.exists():

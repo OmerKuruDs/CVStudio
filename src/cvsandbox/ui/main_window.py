@@ -24,24 +24,27 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QSettings, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
-    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QMainWindow,
     QMessageBox,
     QSplitter,
+    QStackedWidget,
     QStatusBar,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from cvsandbox.ai.cache_storage import default_cache_path, load_caches, save_caches
+from cvsandbox.ai.streaming import bus as streaming_bus
 from cvsandbox.core.codegen import generate_python_code
 from cvsandbox.core.image_io import read_image
 from cvsandbox.core.pipeline import Pipeline, Roi
+from cvsandbox.operations import ai as ai_ops
 from cvsandbox.core.registry import get_operation
 from cvsandbox.core.serialization import load as load_pipeline
 from cvsandbox.core.serialization import save as save_pipeline
@@ -59,11 +62,25 @@ from cvsandbox.ui.node_graph_view import NodeGraphView
 from cvsandbox.ui.operation_catalog import OperationCatalog
 from cvsandbox.ui.parameter_panel import ParameterPanel
 from cvsandbox.ui.pipeline_worker import PipelineRequest, PipelineWorker
+from cvsandbox.ui.activity_bar import ActivityBar
 from cvsandbox.ui.video_feed_controller import VideoFeedController
-from cvsandbox.ui.visualization_panel import VisualizationPanel
+from cvsandbox.ui.viz_pages import Viz2DPage, Viz3DPage
 
 DEBOUNCE_MS = 120
 PREVIEW_MAX_DIM = 1600  # longest-side cap for downscaled-preview mode
+
+
+def _to_bool(raw: object) -> bool:
+    """QSettings on different OSes can return a bool as `bool`, `"true"`/
+    `"false"`, or `0`/`1` — normalize so the rest of the code can rely
+    on a plain Python bool."""
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    return False
 
 
 def downscale_for_preview(image: np.ndarray, max_dim: int = PREVIEW_MAX_DIM) -> np.ndarray:
@@ -151,28 +168,55 @@ class MainWindow(QMainWindow):
         top_splitter.setSizes([200, 860, 340])
         self._top_splitter = top_splitter
 
-        # Vertical splitter between the main work area (image + side panels) and
-        # the node graph at the bottom. The drag handle lets the user trade
-        # vertical space — useful once nodes are positioned freely and the graph
-        # area starts to feel cramped.
+        # The Op-mode page wraps the original three-column splitter so the
+        # historical "Catalog | Image | Param+Histogram" layout is fully
+        # preserved when the activity bar is on Op.
+        op_page = QWidget(self)
+        op_page_layout = QVBoxLayout(op_page)
+        op_page_layout.setContentsMargins(0, 0, 0, 0)
+        op_page_layout.addWidget(top_splitter)
+        self._op_page = op_page
+        # Where the ParameterPanel lives when Op mode is active. The
+        # widget itself is a child of `right_splitter` above; we keep a
+        # reference to its layout so we can re-host the panel here after
+        # a viz page borrows it.
+        self._param_panel_op_layout = right_splitter
+
+        # 2D / 3D pages — compact layouts that share the same param panel.
+        self._viz_2d_page = Viz2DPage(self)
+        self._viz_3d_page = Viz3DPage(self)
+        for page in (self._viz_2d_page, self._viz_3d_page):
+            page.operation_chosen.connect(self._on_operation_chosen)
+
+        self._content_stack = QStackedWidget(self)
+        self._content_stack.addWidget(self._op_page)  # index 0 = Op
+        self._content_stack.addWidget(self._viz_2d_page)  # index 1 = 2D
+        self._content_stack.addWidget(self._viz_3d_page)  # index 2 = 3D
+
+        # Vertical splitter — top is whatever page is active, bottom is the
+        # always-on pipeline graph. The graph is shared across all activity
+        # modes so users can tweak ops while looking at the viz.
         vertical_splitter = QSplitter(Qt.Orientation.Vertical, self)
-        vertical_splitter.addWidget(top_splitter)
+        vertical_splitter.addWidget(self._content_stack)
         vertical_splitter.addWidget(self._pipeline_view)
         vertical_splitter.setStretchFactor(0, 5)
         vertical_splitter.setStretchFactor(1, 1)
         vertical_splitter.setCollapsible(0, False)
         vertical_splitter.setCollapsible(1, False)
-        # Reasonable defaults for a 900-tall window — about 700 px for the
-        # image area, 200 px for the graph strip.
         vertical_splitter.setSizes([700, 200])
         self._pipeline_view.setMinimumHeight(80)
         self._vertical_splitter = vertical_splitter
 
-        # Editor "page" — wraps the existing image / panels / node graph stack.
+        # Activity bar on the far left — collapsible mode switcher.
+        self._activity_bar = ActivityBar(self)
+        self._activity_bar.mode_changed.connect(self._on_activity_mode_changed)
+
         editor_page = QWidget(self)
-        editor_layout = QVBoxLayout(editor_page)
+        editor_layout = QHBoxLayout(editor_page)
         editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.addWidget(vertical_splitter)
+        editor_layout.setSpacing(0)
+        editor_layout.addWidget(self._activity_bar)
+        editor_layout.addWidget(vertical_splitter, 1)
 
         # Dataset gallery "page" — same window, different tab. Clicking a
         # thumbnail flips back to the Editor tab with that image loaded.
@@ -193,18 +237,6 @@ class MainWindow(QMainWindow):
 
         self.setStatusBar(QStatusBar(self))
 
-        # Visualization dock — sits on the right; toggleable from the View menu.
-        # Default hidden so first-run users see the familiar Editor layout.
-        self._viz_panel = VisualizationPanel(self)
-        self._viz_dock = QDockWidget("Visualization", self)
-        self._viz_dock.setObjectName("VisualizationDock")
-        self._viz_dock.setWidget(self._viz_panel)
-        self._viz_dock.setAllowedAreas(
-            Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
-        )
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._viz_dock)
-        self._viz_dock.hide()
-
         self._build_menu()
         self._tools_panel = ImageToolsPanel(
             split_action=self._split_action,
@@ -220,6 +252,75 @@ class MainWindow(QMainWindow):
         self._setup_worker()
         self._setup_debouncer()
         self._wire_signals()
+        self._setup_ai_cache_persistence()
+        self._restore_ui_state()
+
+    def _settings(self) -> QSettings:
+        # Reads QApplication.organizationName / applicationName, which
+        # are set in `ui.app.run` before MainWindow is constructed.
+        return QSettings()
+
+    def _restore_ui_state(self) -> None:
+        """Apply the persisted window geometry + splitter sizes +
+        downscale toggle. Stored values that fail to apply (e.g. a
+        splitter size for a layout that has changed shape since save)
+        are ignored — we want a slightly off but functional layout
+        rather than a launch crash on stale state."""
+        settings = self._settings()
+        geometry = settings.value("window/geometry")
+        if isinstance(geometry, (bytes, bytearray)):
+            self.restoreGeometry(geometry)
+        state = settings.value("window/state")
+        if isinstance(state, (bytes, bytearray)):
+            self.restoreState(state)
+
+        top_sizes = settings.value("splitter/top")
+        if isinstance(top_sizes, list):
+            try:
+                self._top_splitter.setSizes([int(x) for x in top_sizes])
+            except (TypeError, ValueError):
+                pass
+        vertical_sizes = settings.value("splitter/vertical")
+        if isinstance(vertical_sizes, list):
+            try:
+                self._vertical_splitter.setSizes([int(x) for x in vertical_sizes])
+            except (TypeError, ValueError):
+                pass
+
+        downscale = settings.value("view/downscale")
+        if downscale is not None:
+            enabled = _to_bool(downscale)
+            self._downscale_action.setChecked(enabled)
+            self._downscale_enabled = enabled
+
+        mode = settings.value("activity/mode")
+        if isinstance(mode, str) and mode:
+            self._activity_bar.set_current_mode(mode)
+
+    def _save_ui_state(self) -> None:
+        settings = self._settings()
+        settings.setValue("window/geometry", self.saveGeometry())
+        settings.setValue("window/state", self.saveState())
+        settings.setValue("splitter/top", self._top_splitter.sizes())
+        settings.setValue("splitter/vertical", self._vertical_splitter.sizes())
+        settings.setValue("view/downscale", self._downscale_enabled)
+        settings.setValue("activity/mode", self._activity_bar.current_mode)
+
+    def _setup_ai_cache_persistence(self) -> None:
+        """Hydrate every AI backend's cache from disk on launch. A
+        corrupt or missing file just leaves the caches empty — the user
+        will repay the cost on their next inference and we'll write a
+        fresh file on close."""
+        self._ai_cache_path = default_cache_path()
+        try:
+            count = load_caches(self._ai_cache_path, ai_ops.all_backends())
+            if count > 0:
+                self.statusBar().showMessage(
+                    f"Loaded {count} cached AI response(s) from disk"
+                )
+        except OSError:
+            # Don't crash the app over an unreadable cache file.
+            pass
 
     def _install_tools_sidebar(self) -> None:
         """Attach the ImageToolsPanel next to the image. Called after the View-
@@ -240,6 +341,7 @@ class MainWindow(QMainWindow):
             record_action=self._record_action,
             stop_recording_action=self._stop_recording_action,
             stop_capture_action=self._stop_capture_action,
+            pause_capture_action=self._pause_capture_action,
             parent=self._image_with_tools,
         )
         layout = self._image_with_tools.layout()
@@ -249,7 +351,32 @@ class MainWindow(QMainWindow):
     def _build_menu(self) -> None:
         self._build_file_menu()
         self._build_view_menu()
+        self._build_tools_menu()
         self._build_help_menu()
+
+    def _build_tools_menu(self) -> None:
+        tools_menu = self.menuBar().addMenu("&Tools")
+        clear_ai_action = QAction("Clear &AI cache", self)
+        clear_ai_action.setToolTip(
+            "Drop every cached VLM / CLIP / OWL-ViT / BLIP-2 response so the "
+            "next pipeline run hits the model again."
+        )
+        clear_ai_action.triggered.connect(self._on_clear_ai_cache)
+        tools_menu.addAction(clear_ai_action)
+
+    def _on_clear_ai_cache(self) -> None:
+        ai_ops.clear_cache()
+        # Persist the now-empty cache so a restart doesn't reload stale
+        # entries from disk.
+        try:
+            save_caches(self._ai_cache_path, ai_ops.all_backends())
+        except OSError as exc:
+            self.statusBar().showMessage(f"Could not write AI cache: {exc}")
+            return
+        self.statusBar().showMessage("AI cache cleared")
+        # Force a re-render so any "AI Response" panel showing a stale
+        # cached reply refreshes against the now-empty store.
+        self._request_preview()
 
     def _build_help_menu(self) -> None:
         help_menu = self.menuBar().addMenu("&Help")
@@ -278,6 +405,12 @@ class MainWindow(QMainWindow):
         self._open_video_action = QAction("Open &Video…", self)
         self._open_video_action.triggered.connect(self._on_open_video)
         file_menu.addAction(self._open_video_action)
+
+        self._pause_capture_action = QAction("&Pause Video", self)
+        self._pause_capture_action.setShortcut("Space")
+        self._pause_capture_action.triggered.connect(self._on_toggle_pause)
+        self._pause_capture_action.setEnabled(False)
+        file_menu.addAction(self._pause_capture_action)
 
         self._stop_capture_action = QAction("&Stop Capture", self)
         self._stop_capture_action.triggered.connect(self._on_stop_capture)
@@ -376,13 +509,29 @@ class MainWindow(QMainWindow):
 
         view_menu.addSeparator()
 
-        # Use the dock's own toggle so visibility, label, and checked-state
-        # stay in sync regardless of how the user closes the dock (X button,
-        # menu toggle, restored layout).
-        toggle_viz = self._viz_dock.toggleViewAction()
-        toggle_viz.setText("&Visualization panel")
-        toggle_viz.setShortcut("Ctrl+Shift+V")
-        view_menu.addAction(toggle_viz)
+        # Activity bar shortcuts — Ctrl+1/2/3 switches Op/2D/3D mode.
+        # The actions are owned by the menu so the shortcuts work even
+        # when the activity bar isn't focused.
+        op_action = QAction("&Operations editor\tCtrl+1", self)
+        op_action.setShortcut("Ctrl+1")
+        op_action.triggered.connect(
+            lambda: self._activity_bar.set_current_mode(ActivityBar.MODE_OP)
+        )
+        view_menu.addAction(op_action)
+
+        viz2d_action = QAction("2&D visualization\tCtrl+2", self)
+        viz2d_action.setShortcut("Ctrl+2")
+        viz2d_action.triggered.connect(
+            lambda: self._activity_bar.set_current_mode(ActivityBar.MODE_2D)
+        )
+        view_menu.addAction(viz2d_action)
+
+        viz3d_action = QAction("&3D visualization\tCtrl+3", self)
+        viz3d_action.setShortcut("Ctrl+3")
+        viz3d_action.triggered.connect(
+            lambda: self._activity_bar.set_current_mode(ActivityBar.MODE_3D)
+        )
+        view_menu.addAction(viz3d_action)
 
     def _setup_worker(self) -> None:
         self._worker_thread = QThread(self)
@@ -404,8 +553,20 @@ class MainWindow(QMainWindow):
         self._pipeline_view.selection_changed.connect(self._on_selection_changed)
         self._pipeline_view.pipeline_changed.connect(self._request_preview)
         self._param_panel.params_changed.connect(self._request_preview)
+        self._param_panel.run_requested.connect(self._on_run_requested)
         self._image_view.roi_changed.connect(self._on_roi_drawn)
         self._image_view.paste_destination_changed.connect(self._on_paste_destination_dragged)
+        # VLM streams emit `progress` from worker threads as tokens arrive;
+        # we route that through the existing debounced preview path so the
+        # banner refreshes mid-generation without bypassing throttling.
+        streaming_bus().progress.connect(self._request_preview)
+
+    def _on_run_requested(self, node_id: str) -> None:
+        """Authorize a manual-trigger node (currently only the VLM op)
+        to spawn its backend call on the next pipeline run."""
+        from cvsandbox.operations import ai as ai_op
+
+        ai_op.authorize_node(node_id)
 
     def _on_open(self) -> None:
         path, _filter = QFileDialog.getOpenFileName(
@@ -442,6 +603,18 @@ class MainWindow(QMainWindow):
         self._stop_capture_if_active()
         self.statusBar().showMessage("Capture stopped")
 
+    def _on_toggle_pause(self) -> None:
+        if not self._video_controller.is_active():
+            return
+        if self._video_controller.is_paused():
+            self._video_controller.resume()
+            self._pause_capture_action.setText("&Pause Video")
+            self.statusBar().showMessage("Resumed")
+        else:
+            self._video_controller.pause()
+            self._pause_capture_action.setText("&Resume Video")
+            self.statusBar().showMessage("Paused")
+
     def _start_capture(self, source: int | str, *, label: str) -> None:
         try:
             video_source = VideoSource(source)
@@ -450,12 +623,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Capture failed", str(exc))
             return
         self._stop_capture_action.setEnabled(True)
+        self._pause_capture_action.setEnabled(True)
+        self._pause_capture_action.setText("&Pause Video")
         self.statusBar().showMessage(f"Streaming from {label}")
 
     def _stop_capture_if_active(self) -> None:
         if self._video_controller.is_active():
             self._video_controller.stop()
         self._stop_capture_action.setEnabled(False)
+        self._pause_capture_action.setEnabled(False)
+        self._pause_capture_action.setText("&Pause Video")
 
     def _on_video_frame(self, frame: object) -> None:
         if not isinstance(frame, np.ndarray):
@@ -476,6 +653,8 @@ class MainWindow(QMainWindow):
 
     def _on_video_finished(self) -> None:
         self._stop_capture_action.setEnabled(False)
+        self._pause_capture_action.setEnabled(False)
+        self._pause_capture_action.setText("&Pause Video")
         if self._recorder is not None:
             self._on_stop_recording()
         self.statusBar().showMessage("Capture finished")
@@ -806,6 +985,40 @@ class MainWindow(QMainWindow):
         else:
             self._param_panel.set_node(None)
 
+    def _on_activity_mode_changed(self, mode: str) -> None:
+        """Swap the central content stack and re-host the shared ParameterPanel.
+
+        The ParameterPanel is a single widget reused across all four modes.
+        We reparent it on every mode switch so the user always sees one
+        consistent param view inside the current page.
+
+        Op and AI both use the standard 3-column page — AI just filters
+        the left catalog down to the "AI" category so the user does not
+        have to hunt through every OpenCV op to find the model nodes.
+        """
+        if mode == ActivityBar.MODE_2D:
+            self._content_stack.setCurrentWidget(self._viz_2d_page)
+            self._viz_2d_page.install_param_panel(self._param_panel)
+            self._catalog.set_category_filter(None)
+        elif mode == ActivityBar.MODE_3D:
+            self._content_stack.setCurrentWidget(self._viz_3d_page)
+            self._viz_3d_page.install_param_panel(self._param_panel)
+            self._catalog.set_category_filter(None)
+        else:
+            self._content_stack.setCurrentWidget(self._op_page)
+            # Hand the panel back to its Op-mode home — the splitter that
+            # historically hosted it.
+            self._param_panel.setParent(self._param_panel_op_layout)
+            self._param_panel_op_layout.insertWidget(0, self._param_panel)
+            self._param_panel.show()
+            if mode == ActivityBar.MODE_AI:
+                self._catalog.set_category_filter("AI")
+            else:
+                self._catalog.set_category_filter(None)
+        # Re-bind so the freshly-reparented widget rebuilds its form
+        # against the currently-selected node (avoids stale state).
+        self._on_selection_changed(self._pipeline_view._selected_index)
+
     def _request_preview(self) -> None:
         self._debounce.start()  # restarts if already running
 
@@ -813,11 +1026,14 @@ class MainWindow(QMainWindow):
         if self._preview_source is None:
             self._image_view.set_image(None)
             self._histogram_panel.clear()
-            self._viz_panel.clear()
+            self._viz_2d_page.clear()
+            self._viz_3d_page.clear()
             self._pipeline_view.clear_timings()
             return
         steps = tuple(
-            (node.spec.func, dict(node.params)) for node in self._pipeline.nodes if node.enabled
+            (node.spec.func, dict(node.params), node.id)
+            for node in self._pipeline.nodes
+            if node.enabled
         )
         self._next_request_id += 1
         self._latest_request_id = self._next_request_id
@@ -837,7 +1053,8 @@ class MainWindow(QMainWindow):
             return
         self._image_view.set_image(image)
         self._histogram_panel.set_image(image)
-        self._viz_panel.set_image(image)
+        self._viz_2d_page.set_image(image)
+        self._viz_3d_page.set_image(image)
         self._apply_timings(timings)
         if self._recorder is not None and self._video_controller.is_active():
             try:
@@ -872,6 +1089,15 @@ class MainWindow(QMainWindow):
             self._recorder.close()
             self._recorder = None
         self._stop_capture_if_active()
+        try:
+            save_caches(self._ai_cache_path, ai_ops.all_backends())
+        except OSError:
+            # An unwritable cache file mustn't block shutdown.
+            pass
+        try:
+            self._save_ui_state()
+        except Exception:  # noqa: BLE001 — shutdown path, never raise
+            pass
         self._worker_thread.quit()
         self._worker_thread.wait(2000)
         super().closeEvent(event)

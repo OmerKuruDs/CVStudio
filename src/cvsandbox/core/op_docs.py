@@ -1441,6 +1441,174 @@ feeding 3D reconstruction.</p>
       smoother input avoids reconstruction noise.</li>
 </ul>
 """,
+    "ai.vlm_query": """
+<h2>VLM Q&amp;A (Ollama)</h2>
+<p>Sends the current image plus a free-form prompt to a local
+<b>Ollama</b> server running a vision-language model (llava, bakllava,
+etc.). The reply is shown in the <b>AI Response</b> panel on the right
+side — the image itself is returned unchanged so downstream OpenCV
+nodes operate on the original pixels.</p>
+<h3>Setup</h3>
+<ul>
+  <li>Install Ollama from <code>ollama.com</code> and start the
+      service (default URL <code>http://localhost:11434</code>).</li>
+  <li>Pull a vision model once:
+      <code>ollama pull llava</code> (or <code>llava:13b</code>,
+      <code>bakllava</code>).</li>
+</ul>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Prompt</b> — the question/instruction. Examples:
+      <i>"Describe this image in one sentence."</i>,
+      <i>"How many people are in the photo?"</i>,
+      <i>"What's written on the sign?"</i>.</li>
+  <li><b>Model</b> — the Ollama tag of the model to use.</li>
+  <li><b>Host</b> — Ollama server URL (override if Ollama runs on
+      another machine).</li>
+  <li><b>Temperature</b> — 0 for deterministic factual answers,
+      higher for more creative replies.</li>
+  <li><b>Banner font scale</b> — purely visual; tweaking it re-uses
+      the cached reply so the model is not re-invoked.</li>
+</ul>
+<h3>Notes</h3>
+<ul>
+  <li><b>Streaming.</b> Replies arrive token-by-token; the banner shows
+      a "Thinking…" placeholder, then the partial text with a
+      <code>&#9612;</code> cursor as each chunk lands.</li>
+  <li><b>Auto-cancel.</b> Editing prompt, model, or temperature while a
+      stream is in-flight cancels the old worker — the cache is not
+      poisoned and Ollama is not kept busy on an abandoned query. Other
+      VLM nodes' streams keep running.</li>
+  <li>VLM inference is slow (seconds per frame). The final reply is
+      cached per <code>(image, prompt, model, temperature)</code>, so
+      editing downstream nodes or the font scale does not re-hit Ollama.</li>
+  <li>If Ollama is unreachable the banner shows the error message —
+      the pipeline does not crash. Errors are cached too (to prevent
+      retry storms during live preview); change the prompt or model to
+      retry.</li>
+  <li><b>Export Code</b> emits a clearly-marked passthrough for this op
+      — the runtime dependency (Ollama + a downloaded VLM model) cannot
+      be reproduced in a generated standalone script.</li>
+</ul>
+""",
+    "ai.clip_classify": """
+<h2>CLIP Zero-shot Classify (HuggingFace)</h2>
+<p>Score the current image against a user-supplied list of text labels
+using OpenAI's <b>CLIP</b>. Shows the top-K labels with their
+similarity scores in the <b>AI Response</b> panel on the right; the
+image itself is returned unchanged so downstream OpenCV ops keep
+working.</p>
+<h3>Setup</h3>
+<ul>
+  <li>One-time install of the optional AI extras:
+      <code>pip install -e .[ai]</code> (pulls in transformers, torch,
+      pillow — about 5 GB on disk).</li>
+  <li>The first run downloads the chosen CLIP checkpoint (~600 MB for
+      the default <code>openai/clip-vit-base-patch32</code>). The
+      banner shows "Loading model…" while this happens.</li>
+</ul>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Labels</b> — comma- or newline-separated candidate captions.
+      Tip: phrasing as "a photo of a X" often improves accuracy.
+      Examples: <i>a photo of a cat, a photo of a dog</i>; or
+      <i>hard hat present, no hard hat</i>.</li>
+  <li><b>HF model name</b> — any CLIP checkpoint on HuggingFace.
+      Default <code>openai/clip-vit-base-patch32</code> is the
+      smallest/fastest. Larger variants (e.g.
+      <code>openai/clip-vit-large-patch14</code>) cost more memory but
+      score more accurately.</li>
+  <li><b>Top-K results</b> — how many label/score pairs to print on
+      the banner.</li>
+  <li><b>Banner font scale</b> — visual only; cached results reused.</li>
+</ul>
+<h3>Notes</h3>
+<ul>
+  <li><b>Auto-cancel.</b> Editing labels or the model name while a
+      classification is in-flight cancels the old worker.</li>
+  <li>Scores are softmax probabilities across the label set — they sum
+      to ~1.0. A score around <code>1/N</code> means CLIP could not
+      distinguish your labels.</li>
+  <li>Like the VLM op, results are cached per
+      <code>(image, labels, model)</code>. Re-running with the same
+      params is instant.</li>
+</ul>
+""",
+    "ai.owlvit_detect": """
+<h2>OWL-ViT Zero-shot Detection (HuggingFace)</h2>
+<p>Find objects matching free-form text prompts in the image using
+Google's <b>OWL-ViT</b>. Bounding boxes are drawn directly on the
+image (one color per prompt — this is spatial data, so it has to live
+on the pixels), and a textual summary of every detection — label,
+score, and bounding-box coordinates — also appears in the
+<b>AI Response</b> panel on the right.</p>
+<h3>Setup</h3>
+<ul>
+  <li>One-time install of the optional AI extras:
+      <code>pip install -e .[ai]</code> (~5 GB on disk once torch is
+      installed).</li>
+  <li>The first run downloads the chosen OWL-ViT checkpoint (~1.5 GB
+      for the default). The banner shows "Loading model…" while this
+      happens.</li>
+</ul>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Prompts</b> — comma- or newline-separated free-form text.
+      Phrasing as "a photo of a X" generally works best. Each prompt
+      gets its own deterministic color in the rendered output.</li>
+  <li><b>HF model name</b> — any OWL-ViT checkpoint on HuggingFace.
+      Default <code>google/owlvit-base-patch32</code>; the v2 family
+      (<code>google/owlv2-base-patch16-ensemble</code>) scores higher
+      at the cost of memory.</li>
+  <li><b>Score threshold</b> — drops boxes below this confidence.
+      Lower = more boxes (some likely false positives).</li>
+  <li><b>Box line thickness</b> — visual only.</li>
+  <li><b>Label font scale</b> — visual only; cached detections reused.</li>
+</ul>
+<h3>Notes</h3>
+<ul>
+  <li><b>Auto-cancel.</b> Editing prompts, the model name, or the score
+      threshold while a run is in-flight cancels the old worker.</li>
+  <li>Results are cached per
+      <code>(image, prompts, model, threshold)</code>. Tweaking only
+      thickness or font scale re-renders instantly from the cached
+      boxes.</li>
+  <li>Empty result set publishes "No objects matched the prompts" to
+      the response panel — try lowering the score threshold or
+      rephrasing.</li>
+</ul>
+""",
+    "ai.blip2_caption": """
+<h2>BLIP-2 Caption (HuggingFace)</h2>
+<p>Generate a free-form description of the image using HuggingFace's
+<b>BLIP-2</b>. No prompt or label list required — the caption lands in
+the <b>AI Response</b> panel on the right and the image is returned
+unchanged.</p>
+<h3>Setup</h3>
+<ul>
+  <li>One-time install of the optional AI extras:
+      <code>pip install -e .[ai]</code>.</li>
+  <li>First run downloads the chosen BLIP-2 checkpoint. The default
+      <code>Salesforce/blip2-opt-2.7b</code> is ~7 GB; loads in fp16
+      on GPU to fit consumer cards, fp32 on CPU.</li>
+</ul>
+<h3>Parameters</h3>
+<ul>
+  <li><b>HF model name</b> — any BLIP-2-compatible checkpoint.</li>
+  <li><b>Max caption length (tokens)</b> — longer captions are more
+      detailed but take more time and memory.</li>
+</ul>
+<h3>Notes</h3>
+<ul>
+  <li><b>Auto-cancel.</b> Editing the model name or token limit while
+      a caption is generating cancels the old worker.</li>
+  <li>Results are cached per <code>(image, model, max_tokens)</code>.
+      Re-selecting the node, or reloading the same image, hits the
+      cache instantly.</li>
+  <li>BLIP-2 is CPU-tolerant but slow; on a 12 GB GPU expect
+      ~1-2 seconds per caption with the default checkpoint.</li>
+</ul>
+""",
 }
 
 

@@ -23,6 +23,7 @@ from typing import Any
 
 import numpy as np
 
+from cvsandbox.ai import streaming
 from cvsandbox.core.operation import OperationSpec
 
 NodeId = str
@@ -197,7 +198,11 @@ class Graph:
                 outputs[nid] = dict.fromkeys(node.spec.output_ports, fallback)
                 continue
 
-            result = node.call(*input_args)
+            streaming.set_current_node(nid)
+            try:
+                result = node.call(*input_args)
+            finally:
+                streaming.set_current_node(None)
 
             if len(node.spec.output_ports) == 1:
                 outputs[nid] = {node.spec.output_ports[0]: result}  # type: ignore[dict-item]

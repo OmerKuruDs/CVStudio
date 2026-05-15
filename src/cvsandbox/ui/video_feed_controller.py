@@ -32,6 +32,7 @@ class VideoFeedController(QObject):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._in_flight = False
+        self._paused = False
 
     # ------------------------------------------------------------------ public
 
@@ -53,9 +54,28 @@ class VideoFeedController(QObject):
             self._source.release()
             self._source = None
         self._in_flight = False
+        self._paused = False
+
+    def pause(self) -> None:
+        """Halt frame fetches without releasing the source. A frame already in
+        flight will still complete; the next tick after `resume()` picks up
+        from there."""
+        if self._source is None or self._paused:
+            return
+        self._timer.stop()
+        self._paused = True
+
+    def resume(self) -> None:
+        if self._source is None or not self._paused:
+            return
+        self._paused = False
+        self._timer.start()
 
     def is_active(self) -> bool:
         return self._source is not None
+
+    def is_paused(self) -> bool:
+        return self._paused
 
     def mark_processed(self) -> None:
         """Call from the result handler once the pipeline has consumed the
@@ -68,7 +88,7 @@ class VideoFeedController(QObject):
     # ------------------------------------------------------------------ internals
 
     def _tick(self) -> None:
-        if self._in_flight or self._source is None:
+        if self._in_flight or self._paused or self._source is None:
             return
         frame = self._source.read()
         if frame is None:

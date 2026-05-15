@@ -47,6 +47,7 @@ class ImageActionBar(QWidget):
         record_action: QAction,
         stop_recording_action: QAction,
         stop_capture_action: QAction,
+        pause_capture_action: QAction,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -61,6 +62,7 @@ class ImageActionBar(QWidget):
         layout.addWidget(_button(open_dataset_action))
         layout.addWidget(_button(open_camera_action))
         layout.addWidget(_button(open_video_action))
+        layout.addWidget(_button(pause_capture_action))
         layout.addWidget(_button(stop_capture_action))
         layout.addWidget(_vertical_separator(self))
 

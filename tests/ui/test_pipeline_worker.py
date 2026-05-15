@@ -54,7 +54,7 @@ def test_worker_executes_steps_in_order(qapp: QApplication) -> None:
         request = PipelineRequest(
             request_id=1,
             image=image,
-            steps=((_add, {"value": 5}), (_add, {"value": 7})),
+            steps=((_add, {"value": 5}, "n0"), (_add, {"value": 7}, "n1")),
         )
         worker.execute(request)  # direct call: same thread context for this unit test
         _wait_for(lambda: bool(received))
@@ -77,7 +77,7 @@ def test_worker_emits_failed_on_exception(qapp: QApplication) -> None:
         request = PipelineRequest(
             request_id=42,
             image=np.zeros((2, 2), dtype=np.uint8),
-            steps=((_boom, {}),),
+            steps=((_boom, {}, "n_boom"),),
         )
         worker.execute(request)
         _wait_for(lambda: bool(errors))
@@ -118,7 +118,7 @@ def test_worker_applies_roi_crop_and_splice(qapp: QApplication) -> None:
         request = PipelineRequest(
             request_id=1,
             image=image,
-            steps=((_add, {"value": 50}),),
+            steps=((_add, {"value": 50}, "n_roi"),),
             roi=(2, 2, 4, 4),
         )
         worker.execute(request)
@@ -151,7 +151,7 @@ def test_worker_with_roi_returns_source_on_shape_change(qapp: QApplication) -> N
         request = PipelineRequest(
             request_id=2,
             image=image,
-            steps=((_halve, {}),),
+            steps=((_halve, {}, "n_halve"),),
             roi=(2, 2, 4, 4),
         )
         worker.execute(request)
@@ -173,7 +173,11 @@ def test_worker_per_step_timings_match_step_count(qapp: QApplication) -> None:
         request = PipelineRequest(
             request_id=7,
             image=np.zeros((4, 4), dtype=np.uint8),
-            steps=((_add, {"value": 1}), (_add, {"value": 2}), (_add, {"value": 3})),
+            steps=(
+                (_add, {"value": 1}, "a"),
+                (_add, {"value": 2}, "b"),
+                (_add, {"value": 3}, "c"),
+            ),
         )
         worker.execute(request)
         _wait_for(lambda: bool(received))

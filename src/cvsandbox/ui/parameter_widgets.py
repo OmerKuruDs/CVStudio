@@ -15,14 +15,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFocusEvent, QKeyEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPlainTextEdit,
     QSpinBox,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -180,12 +184,79 @@ class KernelSizeControl(ParameterControl):
         self._spin.blockSignals(False)
 
 
+class _CommitOnBlurTextEdit(QPlainTextEdit):
+    """QPlainTextEdit variant that emits `editing_finished` only when the
+    user is done typing — focus-out, Ctrl+Enter, or Ctrl+Return. The
+    default QPlainTextEdit fires `textChanged` on every keystroke, which
+    is wrong for expensive consumers like the VLM op: typing a 20-char
+    prompt would otherwise trigger 20 pipeline executions."""
+
+    editing_finished = Signal()
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:  # noqa: N802 (Qt override)
+        super().focusOutEvent(event)
+        self.editing_finished.emit()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 (Qt override)
+        # Ctrl+Enter / Ctrl+Return commits without leaving the field.
+        is_enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        if is_enter and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.editing_finished.emit()
+            return
+        super().keyPressEvent(event)
+
+
+class StringControl(ParameterControl):
+    """Free-form text. Single-line by default; multi-line when the parameter's
+    `step` field is set (we re-purpose it as a "rows" hint so we don't need
+    another field on Parameter just for this).
+
+    Both variants commit on focus-out / Enter rather than on every keystroke —
+    this keeps the pipeline worker idle while the user is still typing."""
+
+    def __init__(self, param: Parameter, parent: QWidget | None = None) -> None:
+        super().__init__(param, parent)
+        rows = int(param.step) if param.step is not None else 1
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        if rows > 1:
+            self._edit: QLineEdit | _CommitOnBlurTextEdit = _CommitOnBlurTextEdit(self)
+            self._edit.setPlainText(str(param.default))
+            self._edit.setFixedHeight(max(48, 18 * rows))
+            self._edit.editing_finished.connect(lambda: self.value_changed.emit())
+        else:
+            self._edit = QLineEdit(self)
+            self._edit.setText(str(param.default))
+            self._edit.editingFinished.connect(lambda: self.value_changed.emit())
+        layout.addWidget(self._edit)
+
+    def value(self) -> str:
+        if isinstance(self._edit, _CommitOnBlurTextEdit):
+            return str(self._edit.toPlainText())
+        return str(self._edit.text())
+
+    def set_value(self, value: Any) -> None:
+        self._edit.blockSignals(True)
+        if isinstance(self._edit, _CommitOnBlurTextEdit):
+            self._edit.setPlainText(str(value))
+        else:
+            self._edit.setText(str(value))
+        self._edit.blockSignals(False)
+
+    def commit_pending_edit(self) -> None:
+        """Force-emit `value_changed` regardless of focus state. Used by
+        the Run button so an in-progress prompt edit gets committed to
+        node.params before the pipeline re-runs."""
+        self.value_changed.emit()
+
+
 _CONTROLS: dict[str, type[ParameterControl]] = {
     "int": IntControl,
     "float": FloatControl,
     "bool": BoolControl,
     "choice": ChoiceControl,
     "kernel_size": KernelSizeControl,
+    "string": StringControl,
 }
 
 

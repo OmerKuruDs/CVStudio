@@ -122,3 +122,44 @@ def test_controller_marks_processed_resets_in_flight(qapp: QApplication) -> None
     controller.mark_processed()
     assert controller._in_flight is False
     controller.stop()
+
+
+def test_controller_pause_blocks_new_frames_until_resume(qapp: QApplication) -> None:
+    received: list[np.ndarray] = []
+    controller = VideoFeedController()
+    controller.frame_ready.connect(received.append)
+    controller.start(_make_source([_frame(1), _frame(2), _frame(3)]))
+
+    controller._tick()
+    controller.mark_processed()
+    assert [int(f[0, 0, 0]) for f in received] == [1]
+
+    controller.pause()
+    assert controller.is_paused() is True
+    # Manual tick after pause must not pull a new frame.
+    controller._tick()
+    assert [int(f[0, 0, 0]) for f in received] == [1]
+
+    controller.resume()
+    assert controller.is_paused() is False
+    controller._tick()
+    assert [int(f[0, 0, 0]) for f in received] == [1, 2]
+    controller.stop()
+
+
+def test_controller_stop_clears_paused_flag(qapp: QApplication) -> None:
+    controller = VideoFeedController()
+    controller.start(_make_source([_frame(0)]))
+    controller.pause()
+    assert controller.is_paused() is True
+    controller.stop()
+    assert controller.is_paused() is False
+    assert controller.is_active() is False
+
+
+def test_controller_pause_is_noop_without_source(qapp: QApplication) -> None:
+    controller = VideoFeedController()
+    controller.pause()  # no source → silently no-op
+    assert controller.is_paused() is False
+    controller.resume()  # likewise
+    assert controller.is_paused() is False

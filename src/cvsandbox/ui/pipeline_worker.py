@@ -23,9 +23,13 @@ from typing import Any
 import numpy as np
 from PySide6.QtCore import QObject, Signal, Slot
 
+from cvsandbox.ai import streaming
 from cvsandbox.core.pipeline import _fit_crop_to_destination, coerce_to_match
 
-OperationCall = tuple[Callable[..., np.ndarray], dict[str, Any]]
+OperationCall = tuple[Callable[..., np.ndarray], dict[str, Any], str]
+"""(func, params, node_id). `node_id` is the originating pipeline node id —
+ops that care about identity (e.g. AI streaming) read it from the
+`streaming.current_node()` thread-local set around each call."""
 
 
 @dataclass(frozen=True)
@@ -73,9 +77,13 @@ class PipelineWorker(QObject):
     ) -> tuple[np.ndarray, list[float]]:
         current = image
         timings: list[float] = []
-        for func, params in steps:
+        for func, params, node_id in steps:
             t0 = time.perf_counter()
-            current = func(current, **params)
+            streaming.set_current_node(node_id)
+            try:
+                current = func(current, **params)
+            finally:
+                streaming.set_current_node(None)
             timings.append(time.perf_counter() - t0)
         return current, timings
 

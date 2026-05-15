@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-ParamKind = Literal["int", "float", "bool", "choice", "kernel_size"]
+ParamKind = Literal["int", "float", "bool", "choice", "kernel_size", "string"]
 
 OperationFunc = Callable[..., np.ndarray]
 CodeExporter = Callable[[dict[str, Any], tuple[str, ...], str], list[str]]
@@ -79,6 +79,12 @@ class OperationSpec:
     output_ports: tuple[str, ...] = ("out",)
     """Names of the outputs the op produces. Default = a single image named
     "out". Multi-output ops (channel split, ...) override this."""
+    manual_trigger: bool = False
+    """When True, the op declares that it should not auto-run on every
+    param change — `func` is expected to render a placeholder until the
+    user explicitly requests execution (e.g. by clicking a Run button in
+    the parameter panel). Used by expensive ops like VLM queries where
+    each invocation costs seconds and external resources."""
 
     def __post_init__(self) -> None:
         if not self.id or "." not in self.id:

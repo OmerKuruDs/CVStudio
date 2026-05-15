@@ -13,6 +13,7 @@ from __future__ import annotations
 from cvsandbox.core.operation import OperationSpec
 from cvsandbox.core.registry import register_operation
 from cvsandbox.operations import (
+    ai,
     analysis,
     arithmetic,
     color,
@@ -42,6 +43,7 @@ _BUILTIN_MODULES = (
     segmentation,
     arithmetic,
     stereo,
+    ai,
 )
 
 
