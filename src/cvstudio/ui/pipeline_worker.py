@@ -23,8 +23,8 @@ from typing import Any
 import numpy as np
 from PySide6.QtCore import QObject, Signal, Slot
 
-from cvsandbox.ai import streaming
-from cvsandbox.core.pipeline import _fit_crop_to_destination, coerce_to_match
+from cvstudio.ai import streaming
+from cvstudio.core.pipeline import _fit_crop_to_destination, coerce_to_match
 
 OperationCall = tuple[Callable[..., np.ndarray], dict[str, Any], str]
 """(func, params, node_id). `node_id` is the originating pipeline node id —

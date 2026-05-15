@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cvsandbox.core.operation import OperationSpec
-from cvsandbox.core.registry import (
+from cvstudio.core.operation import OperationSpec
+from cvstudio.core.registry import (
     all_operations,
     clear_registry,
     get_operation,
@@ -58,7 +58,7 @@ def test_all_operations_sorted_by_category_then_name() -> None:
 
 
 def test_builtin_operations_register_on_load() -> None:
-    from cvsandbox.operations import load_builtin_operations
+    from cvstudio.operations import load_builtin_operations
 
     load_builtin_operations()
     assert get_operation("filtering.gaussian_blur").name == "Gaussian Blur"

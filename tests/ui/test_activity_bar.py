@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.activity_bar import ActivityBar
+from cvstudio.ui.activity_bar import ActivityBar
 
 
 @pytest.fixture(scope="module")

@@ -34,10 +34,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from cvsandbox.core.graph import GraphEdge
-from cvsandbox.core.operation import OperationSpec
-from cvsandbox.core.pipeline import Pipeline, Roi
-from cvsandbox.core.registry import get_operation
+from cvstudio.core.graph import GraphEdge
+from cvstudio.core.operation import OperationSpec
+from cvstudio.core.pipeline import Pipeline, Roi
+from cvstudio.core.registry import get_operation
 
 CURRENT_VERSION = 2
 

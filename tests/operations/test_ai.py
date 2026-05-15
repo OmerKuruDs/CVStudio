@@ -7,9 +7,9 @@ from collections.abc import Iterator
 import numpy as np
 import pytest
 
-from cvsandbox.ai import ollama_client, streaming
-from cvsandbox.operations import ai as ai_op
-from cvsandbox.operations.ai import VLM_QUERY
+from cvstudio.ai import ollama_client, streaming
+from cvstudio.operations import ai as ai_op
+from cvstudio.operations.ai import VLM_QUERY
 
 
 @pytest.fixture(autouse=True)
@@ -366,7 +366,7 @@ def test_vlm_query_cache_hit_does_not_require_auth() -> None:
 
 
 def _run_clip(img: np.ndarray, **overrides) -> np.ndarray:
-    from cvsandbox.operations.ai import CLIP_CLASSIFY
+    from cvstudio.operations.ai import CLIP_CLASSIFY
 
     params = {
         "labels": "a photo of a cat, a photo of a dog, a photo of a car",
@@ -398,7 +398,7 @@ def test_clip_classify_empty_labels_shows_hint(monkeypatch: pytest.MonkeyPatch) 
     def _should_not_classify(*_args, **_kwargs):
         raise AssertionError("must not call hf_clip.classify without labels")
 
-    from cvsandbox.ai import hf_clip
+    from cvstudio.ai import hf_clip
 
     monkeypatch.setattr(hf_clip, "classify", _should_not_classify)
     img = np.full((80, 240, 3), 100, dtype=np.uint8)
@@ -415,7 +415,7 @@ def test_clip_classify_caches_result(
         calls.append(list(labels))
         return [(label, 1.0 / len(labels)) for label in labels]
 
-    from cvsandbox.ai import hf_clip
+    from cvstudio.ai import hf_clip
 
     monkeypatch.setattr(hf_clip, "classify", _fake_classify)
     img = np.full((120, 240, 3), 150, dtype=np.uint8)
@@ -451,7 +451,7 @@ def test_clip_classify_renders_top_labels_after_sync_run(
     def _fake_classify(image, labels, *, model_name):  # noqa: ARG001
         return [(labels[0], 0.91), (labels[1], 0.07), (labels[2], 0.02)]
 
-    from cvsandbox.ai import hf_clip
+    from cvstudio.ai import hf_clip
 
     monkeypatch.setattr(hf_clip, "classify", _fake_classify)
     img = np.full((180, 360, 3), 150, dtype=np.uint8)
@@ -480,7 +480,7 @@ def test_clip_classify_renders_top_labels_after_sync_run(
 def test_clip_classify_caches_extras_missing_error(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_clip
+    from cvstudio.ai import hf_clip
 
     def _boom(*_args, **_kwargs):
         raise hf_clip.HFExtrasMissing("install transformers + torch")
@@ -517,7 +517,7 @@ def test_clip_classify_label_change_creates_new_key(
         received.append(tuple(labels))
         return [(label, 1.0 / len(labels)) for label in labels]
 
-    from cvsandbox.ai import hf_clip
+    from cvstudio.ai import hf_clip
 
     monkeypatch.setattr(hf_clip, "classify", _fake_classify)
     img = np.full((80, 80, 3), 100, dtype=np.uint8)
@@ -530,7 +530,7 @@ def test_clip_classify_label_change_creates_new_key(
 
 
 def _run_owlvit(img: np.ndarray, **overrides) -> np.ndarray:
-    from cvsandbox.operations.ai import OWLVIT_DETECT
+    from cvstudio.operations.ai import OWLVIT_DETECT
 
     params = {
         "prompts": "a photo of a person, a photo of a car",
@@ -555,7 +555,7 @@ def test_color_for_label_is_deterministic_across_calls() -> None:
 
 
 def test_draw_boxes_renders_rectangle_on_canvas() -> None:
-    from cvsandbox.ai.hf_owlvit import Detection
+    from cvstudio.ai.hf_owlvit import Detection
 
     img = np.full((200, 320, 3), 128, dtype=np.uint8)
     detections = [Detection(label="person", score=0.84, box=(50, 60, 200, 180))]
@@ -578,7 +578,7 @@ def test_draw_boxes_empty_detections_returns_unchanged_canvas() -> None:
 
 
 def test_draw_boxes_clips_out_of_bounds_box() -> None:
-    from cvsandbox.ai.hf_owlvit import Detection
+    from cvstudio.ai.hf_owlvit import Detection
 
     img = np.full((100, 100, 3), 0, dtype=np.uint8)
     # Box partially outside the image — must not raise.
@@ -590,8 +590,8 @@ def test_draw_boxes_clips_out_of_bounds_box() -> None:
 def test_owlvit_detect_caches_detection_list(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_owlvit
-    from cvsandbox.ai.hf_owlvit import Detection
+    from cvstudio.ai import hf_owlvit
+    from cvstudio.ai.hf_owlvit import Detection
 
     calls: list[list[str]] = []
 
@@ -634,8 +634,8 @@ def test_owlvit_detect_requires_auth_in_pipeline(
 def test_owlvit_detect_renders_boxes_for_cached_result(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_owlvit
-    from cvsandbox.ai.hf_owlvit import Detection
+    from cvstudio.ai import hf_owlvit
+    from cvstudio.ai.hf_owlvit import Detection
 
     def _fake_detect(image, prompts, *, model_name, score_threshold):  # noqa: ARG001
         return [
@@ -654,8 +654,8 @@ def test_owlvit_detect_renders_boxes_for_cached_result(
 def test_owlvit_detect_caches_extras_missing(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_owlvit
-    from cvsandbox.ai.hf_clip import HFExtrasMissing
+    from cvstudio.ai import hf_owlvit
+    from cvstudio.ai.hf_clip import HFExtrasMissing
 
     def _boom(*_args, **_kwargs):
         raise HFExtrasMissing("install transformers + torch")
@@ -687,7 +687,7 @@ def test_owlvit_detect_caches_extras_missing(
 def test_owlvit_detect_empty_prompts_show_hint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from cvsandbox.ai import hf_owlvit
+    from cvstudio.ai import hf_owlvit
 
     def _should_not_detect(*_args, **_kwargs):
         raise AssertionError("must not call hf_owlvit.detect without prompts")
@@ -703,8 +703,8 @@ def test_owlvit_detect_threshold_in_cache_key(
 ) -> None:
     """Changing the score threshold must invalidate the cache and trigger
     a fresh detection — it changes what OWL-ViT returns."""
-    from cvsandbox.ai import hf_owlvit
-    from cvsandbox.ai.hf_owlvit import Detection
+    from cvstudio.ai import hf_owlvit
+    from cvstudio.ai.hf_owlvit import Detection
 
     seen_thresholds: list[float] = []
 
@@ -723,7 +723,7 @@ def test_owlvit_detect_threshold_in_cache_key(
 
 
 def _run_blip2(img: np.ndarray, **overrides) -> np.ndarray:
-    from cvsandbox.operations.ai import BLIP2_CAPTION
+    from cvstudio.operations.ai import BLIP2_CAPTION
 
     params = {
         "model_name": "Salesforce/blip2-opt-2.7b",
@@ -736,7 +736,7 @@ def _run_blip2(img: np.ndarray, **overrides) -> np.ndarray:
 def test_blip2_caption_publishes_to_display_and_caches(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_blip2
+    from cvstudio.ai import hf_blip2
 
     calls: list[int] = []
 
@@ -782,8 +782,8 @@ def test_blip2_caption_requires_auth_in_pipeline(
 def test_blip2_caption_caches_extras_missing(
     sync_threads, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from cvsandbox.ai import hf_blip2
-    from cvsandbox.ai.hf_clip import HFExtrasMissing
+    from cvstudio.ai import hf_blip2
+    from cvstudio.ai.hf_clip import HFExtrasMissing
 
     def _boom(*_args, **_kwargs):
         raise HFExtrasMissing("install transformers + torch")
@@ -801,7 +801,7 @@ def test_blip2_caption_tokens_in_cache_key(
 ) -> None:
     """Changing max_new_tokens must invalidate the cache so the user
     sees the longer caption they asked for."""
-    from cvsandbox.ai import hf_blip2
+    from cvstudio.ai import hf_blip2
 
     seen: list[int] = []
 
@@ -863,7 +863,7 @@ def test_every_ai_op_exposes_auto_run_param() -> None:
     """Smoke-check: each AI op spec must declare auto_run so the
     parameter panel exposes a single, uniform "run on every frame"
     toggle across backends."""
-    from cvsandbox.operations.ai import (
+    from cvstudio.operations.ai import (
         BLIP2_CAPTION,
         CLIP_CLASSIFY,
         OWLVIT_DETECT,
@@ -882,7 +882,7 @@ def test_pipeline_worker_sets_current_node_around_each_call() -> None:
     """The worker's thread-local plumbing is what makes
     `cancel_node_streams_except` meaningful — verify each step sees its
     node_id and that the local is cleared between steps."""
-    from cvsandbox.ui.pipeline_worker import PipelineWorker
+    from cvstudio.ui.pipeline_worker import PipelineWorker
 
     observed: list[str | None] = []
 

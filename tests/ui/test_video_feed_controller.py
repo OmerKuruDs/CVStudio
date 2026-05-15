@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.core.video import VideoSource
-from cvsandbox.ui.video_feed_controller import VideoFeedController
+from cvstudio.core.video import VideoSource
+from cvstudio.ui.video_feed_controller import VideoFeedController
 
 
 class _FakeCapture:

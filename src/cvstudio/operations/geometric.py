@@ -12,7 +12,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 _INTERPOLATIONS = {
     "Nearest": cv2.INTER_NEAREST,

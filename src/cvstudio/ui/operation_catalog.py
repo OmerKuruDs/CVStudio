@@ -9,7 +9,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem, QWidget
 
-from cvsandbox.core.registry import all_operations
+from cvstudio.core.registry import all_operations
 
 
 class OperationCatalog(QTreeWidget):

@@ -1,7 +1,7 @@
 """Python code generation for pipelines.
 
 Produces a self-contained `process(img)` function that reproduces the pipeline
-outside of cvsandbox. Generation walks the graph in topological order, gives
+outside of cvstudio. Generation walks the graph in topological order, gives
 every node its own ``step_N`` variable, and resolves each op's input ports
 against the actual incoming edges so multi-input and branching pipelines
 export to runnable code.
@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from cvsandbox.core.graph import Graph, GraphEdge, NodeId
-from cvsandbox.core.pipeline import Pipeline
+from cvstudio.core.graph import Graph, GraphEdge, NodeId
+from cvstudio.core.pipeline import Pipeline
 
 _HEADER = (
     "import cv2",

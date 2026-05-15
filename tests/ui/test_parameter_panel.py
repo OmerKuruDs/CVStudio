@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ai import streaming
-from cvsandbox.core.operation import OperationSpec, Parameter
-from cvsandbox.core.pipeline import Pipeline
-from cvsandbox.ui.parameter_panel import ParameterPanel
+from cvstudio.ai import streaming
+from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.core.pipeline import Pipeline
+from cvstudio.ui.parameter_panel import ParameterPanel
 
 
 def _spec_with(*, manual_trigger: bool) -> OperationSpec:

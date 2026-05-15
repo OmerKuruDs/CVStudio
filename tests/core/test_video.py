@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cvsandbox.core.video import VideoSource
+from cvstudio.core.video import VideoSource
 
 
 class _FakeCapture:
@@ -141,7 +141,7 @@ def _writer_factory(records: list[_FakeWriter], *, opened: bool = True):
 
 
 def test_video_recorder_initialises_writer_lazily_on_first_frame() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder("out.mp4", fps=30.0, writer_factory=_writer_factory(records))
@@ -157,7 +157,7 @@ def test_video_recorder_initialises_writer_lazily_on_first_frame() -> None:
 
 
 def test_video_recorder_promotes_grayscale_frames_to_bgr() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder("out.mp4", fps=24.0, writer_factory=_writer_factory(records))
@@ -168,7 +168,7 @@ def test_video_recorder_promotes_grayscale_frames_to_bgr() -> None:
 
 
 def test_video_recorder_resizes_frames_on_size_mismatch() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder("out.mp4", fps=24.0, writer_factory=_writer_factory(records))
@@ -179,7 +179,7 @@ def test_video_recorder_resizes_frames_on_size_mismatch() -> None:
 
 
 def test_video_recorder_raises_when_writer_fails_to_open() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder(
@@ -192,7 +192,7 @@ def test_video_recorder_raises_when_writer_fails_to_open() -> None:
 
 
 def test_video_recorder_close_releases_underlying_writer() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder("out.mp4", fps=30.0, writer_factory=_writer_factory(records))
@@ -203,7 +203,7 @@ def test_video_recorder_close_releases_underlying_writer() -> None:
 
 
 def test_video_recorder_ignores_empty_frames() -> None:
-    from cvsandbox.core.video import VideoRecorder
+    from cvstudio.core.video import VideoRecorder
 
     records: list[_FakeWriter] = []
     rec = VideoRecorder("out.mp4", fps=30.0, writer_factory=_writer_factory(records))

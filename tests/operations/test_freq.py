@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.freq import (
+from cvstudio.operations.freq import (
     BAND_PASS,
     FFT_MAGNITUDE,
     FFT_PHASE,

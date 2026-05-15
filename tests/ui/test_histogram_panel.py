@@ -5,7 +5,7 @@ import pytest
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.histogram_panel import (
+from cvstudio.ui.histogram_panel import (
     _BGR_COLORS,
     _GRAY_COLOR,
     HistogramPanel,

@@ -8,7 +8,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.dataset_page import DatasetPage
+from cvstudio.ui.dataset_page import DatasetPage
 
 
 def _write_image(path: Path, value: int = 50) -> None:

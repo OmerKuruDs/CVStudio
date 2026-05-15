@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cvsandbox.core.graph import Graph, GraphEdge, GraphNode
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.graph import Graph, GraphEdge, GraphNode
+from cvstudio.core.operation import OperationSpec, Parameter
 
 
 def _add_spec(spec_id: str = "test.add") -> OperationSpec:

@@ -30,7 +30,7 @@ FEATURE_TOPICS: tuple[FeatureTopic, ...] = (
         title="Getting started",
         body="""
 <h2>Getting started</h2>
-<p>cvsandbox is an interactive playground for OpenCV pipelines. The typical
+<p>cvstudio is an interactive playground for OpenCV pipelines. The typical
 workflow is:</p>
 <ul>
   <li><b>1. Load something to look at.</b> Use <code>File &rarr; Open
@@ -268,7 +268,7 @@ Qt repaints or histogram updates.</p>
 <p>Runs the pipeline on the <b>full-resolution</b> source and writes the
 result to disk. The output format follows the chosen extension — PNG keeps
 exact pixel values, JPG compresses, TIFF preserves precision (though
-cvsandbox writes 8-bit content), BMP / WebP are also supported.</p>
+cvstudio writes 8-bit content), BMP / WebP are also supported.</p>
 <p>This is the right button when you want to commit the version you've
 just tuned. It always uses the original loaded image, so even with
 <b>Downscale large previews</b> active you still get a full-res output.</p>

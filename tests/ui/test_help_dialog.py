@@ -4,8 +4,8 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.core.operation import OperationSpec, Parameter
-from cvsandbox.ui.help_dialog import HelpDialog
+from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.ui.help_dialog import HelpDialog
 
 
 def _spec(spec_id: str, name: str, category: str) -> OperationSpec:

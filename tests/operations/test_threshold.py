@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.threshold import (
+from cvstudio.operations.threshold import (
     ADAPTIVE_THRESHOLD,
     BINARY_THRESHOLD,
     IN_RANGE_BGR,

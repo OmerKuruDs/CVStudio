@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.morphology import (
+from cvstudio.operations.morphology import (
     BLACKHAT,
     CLOSE,
     DILATE,

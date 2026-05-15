@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.op_docs import FEATURE_TOPICS, get_feature_doc, get_op_doc
-from cvsandbox.core.operation import OperationSpec
+from cvstudio.core.op_docs import FEATURE_TOPICS, get_feature_doc, get_op_doc
+from cvstudio.core.operation import OperationSpec
 
 _FEATURE_PREFIX = "feature:"
 _OP_PREFIX = "op:"
@@ -45,7 +45,7 @@ def _sort_specs(specs: Iterable[OperationSpec]) -> list[OperationSpec]:
 class HelpDialog(QDialog):
     def __init__(self, specs: Iterable[OperationSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Operation Guide — cvsandbox")
+        self.setWindowTitle("Operation Guide — CVStudio")
         self.setModal(False)
         self.resize(980, 660)
 

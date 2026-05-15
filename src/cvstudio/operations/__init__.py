@@ -10,9 +10,9 @@ registration order implicit and makes the registry hard to reset in tests.
 
 from __future__ import annotations
 
-from cvsandbox.core.operation import OperationSpec
-from cvsandbox.core.registry import register_operation
-from cvsandbox.operations import (
+from cvstudio.core.operation import OperationSpec
+from cvstudio.core.registry import register_operation
+from cvstudio.operations import (
     ai,
     analysis,
     arithmetic,
@@ -53,7 +53,7 @@ def all_builtin_specs() -> tuple[OperationSpec, ...]:
 
 def load_builtin_operations() -> None:
     """Register every built-in operation. Safe to call repeatedly."""
-    from cvsandbox.core.registry import get_operation
+    from cvstudio.core.registry import get_operation
 
     for spec in all_builtin_specs():
         try:

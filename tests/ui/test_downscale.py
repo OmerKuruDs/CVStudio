@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.ui.main_window import PREVIEW_MAX_DIM, downscale_for_preview
+from cvstudio.ui.main_window import PREVIEW_MAX_DIM, downscale_for_preview
 
 
 def test_small_image_is_returned_unchanged() -> None:

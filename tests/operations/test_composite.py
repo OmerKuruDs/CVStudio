@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.composite import APPLY_MASK, BLEND, DIFFERENCE
+from cvstudio.operations.composite import APPLY_MASK, BLEND, DIFFERENCE
 
 
 def test_blend_default_alpha_is_a_midpoint_average() -> None:

@@ -7,7 +7,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 
 def _gaussian_blur(image: np.ndarray, ksize: int, sigma_x: float) -> np.ndarray:

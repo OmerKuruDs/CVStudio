@@ -4,9 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from cvsandbox.ai import cache_storage
-from cvsandbox.ai.hf_owlvit import Detection
-from cvsandbox.operations import ai as ai_op
+from cvstudio.ai import cache_storage
+from cvstudio.ai.hf_owlvit import Detection
+from cvstudio.operations import ai as ai_op
 
 
 def _img(seed: int = 0) -> np.ndarray:

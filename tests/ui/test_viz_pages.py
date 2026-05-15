@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication, QLabel
 
-from cvsandbox.operations import load_builtin_operations
-from cvsandbox.ui.viz_pages import AddOpButton, Viz2DPage, Viz3DPage
+from cvstudio.operations import load_builtin_operations
+from cvstudio.ui.viz_pages import AddOpButton, Viz2DPage, Viz3DPage
 
 
 @pytest.fixture(scope="module")

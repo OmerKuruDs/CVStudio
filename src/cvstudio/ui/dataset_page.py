@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.batch import discover_images
-from cvsandbox.core.image_io import read_thumbnail
-from cvsandbox.ui.image_view import _ndarray_to_qpixmap
+from cvstudio.core.batch import discover_images
+from cvstudio.core.image_io import read_thumbnail
+from cvstudio.ui.image_view import _ndarray_to_qpixmap
 
 THUMB_PX = 160
 

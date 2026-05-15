@@ -23,10 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.ai.streaming import bus as streaming_bus
-from cvsandbox.ai.streaming import get_node_display
-from cvsandbox.core.pipeline import PipelineNode
-from cvsandbox.ui.parameter_widgets import (
+from cvstudio.ai.streaming import bus as streaming_bus
+from cvstudio.ai.streaming import get_node_display
+from cvstudio.core.pipeline import PipelineNode
+from cvstudio.ui.parameter_widgets import (
     ParameterControl,
     StringControl,
     create_control,

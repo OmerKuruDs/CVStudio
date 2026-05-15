@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from cvsandbox.core.video import VideoSource
+from cvstudio.core.video import VideoSource
 
 DEFAULT_FPS = 30.0
 

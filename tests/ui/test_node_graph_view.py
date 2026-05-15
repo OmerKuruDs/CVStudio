@@ -4,9 +4,9 @@ import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.core.operation import OperationSpec, Parameter
-from cvsandbox.core.pipeline import Pipeline
-from cvsandbox.ui.node_graph_view import (
+from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.core.pipeline import Pipeline
+from cvstudio.ui.node_graph_view import (
     NODE_GAP,
     NODE_WIDTH,
     SCENE_MARGIN,

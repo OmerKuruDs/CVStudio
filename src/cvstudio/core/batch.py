@@ -24,7 +24,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from cvsandbox.core.image_io import read_image
+from cvstudio.core.image_io import read_image
 
 IMAGE_EXTENSIONS: frozenset[str] = frozenset(
     {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}

@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.batch import (
+from cvstudio.core.batch import (
     BatchRequest,
     BatchResult,
     ProcessFunc,

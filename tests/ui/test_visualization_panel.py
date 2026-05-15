@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.visualization_panel import (
+from cvstudio.ui.visualization_panel import (
     HEATMAP_COLORMAPS,
     POINT_CLOUD_TARGET_POINTS,
     SURFACE_MAX_GRID,

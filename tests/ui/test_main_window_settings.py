@@ -11,15 +11,15 @@ import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.operations import load_builtin_operations
-from cvsandbox.ui.main_window import MainWindow
+from cvstudio.operations import load_builtin_operations
+from cvstudio.ui.main_window import MainWindow
 
 
 @pytest.fixture
 def isolated_qsettings(qapp: QApplication, monkeypatch: pytest.MonkeyPatch):
     """Point QApplication at a one-shot organization name so the test
     cannot interfere with the user's real settings file."""
-    org = f"cvsandbox-test-{uuid.uuid4().hex[:8]}"
+    org = f"cvstudio-test-{uuid.uuid4().hex[:8]}"
     qapp.setOrganizationName(org)
     qapp.setApplicationName(org)
     yield org
@@ -79,7 +79,7 @@ def test_save_state_round_trips_activity_mode(
 ) -> None:
     load_builtin_operations()
     win = MainWindow()
-    from cvsandbox.ui.activity_bar import ActivityBar
+    from cvstudio.ui.activity_bar import ActivityBar
 
     win._activity_bar.set_current_mode(ActivityBar.MODE_AI)
     win._save_ui_state()

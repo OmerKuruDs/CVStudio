@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.analysis import FIND_CONTOURS
+from cvstudio.operations.analysis import FIND_CONTOURS
 
 
 def _mask_with_two_blobs() -> np.ndarray:

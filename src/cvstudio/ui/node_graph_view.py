@@ -43,8 +43,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.graph import GraphEdge
-from cvsandbox.core.pipeline import Pipeline
+from cvstudio.core.graph import GraphEdge
+from cvstudio.core.pipeline import Pipeline
 
 NODE_WIDTH = 150
 NODE_HEIGHT = 64

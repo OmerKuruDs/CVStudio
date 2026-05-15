@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cvsandbox.operations.color import (
+from cvstudio.operations.color import (
     CHANNEL,
     CLAHE,
     HSV_IN_RANGE,

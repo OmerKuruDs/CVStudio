@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 
 def _identity(image: np.ndarray) -> np.ndarray:

@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="src/cvsandbox/resources/icon.svg" alt="cvsandbox" width="280" />
+<img src="src/cvstudio/resources/icon.svg" alt="CVStudio" width="280" />
 
-# cvsandbox
+# CVStudio
 
 **An interactive OpenCV + AI playground. Chain image operations, tune every parameter with live preview, ask a VLM what's in the frame — and export the OpenCV side as ready-to-run Python.**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-cvsandbox is a desktop tool for **finding the right OpenCV pipeline by iterating on parameters in real time** — and, optionally, for **asking a vision model what your processed image contains**. Load an image, stack operations (Gaussian blur → adaptive threshold → morphology → find contours, ...), tweak every parameter with auto-generated sliders, then export the OpenCV side as a self-contained Python function whose output matches the live preview byte-for-byte.
+CVStudio is a desktop tool for **finding the right OpenCV pipeline by iterating on parameters in real time** — and, optionally, for **asking a vision model what your processed image contains**. Load an image, stack operations (Gaussian blur → adaptive threshold → morphology → find contours, ...), tweak every parameter with auto-generated sliders, then export the OpenCV side as a self-contained Python function whose output matches the live preview byte-for-byte.
 
 Built for engineers who currently iterate on `cv2.GaussianBlur(img, (5, 5), 0)` calls in Jupyter cells, one parameter at a time — and who'd like an LLM-grade second opinion on the result without leaving the editor.
 
@@ -82,14 +82,14 @@ Left-rail mode switcher: **Op** / **2D** / **3D** / **AI**. Op shows the full op
 ## Quick start
 
 ```bash
-git clone https://github.com/OmerKuru/cvsandbox.git
-cd cvsandbox
+git clone https://github.com/OmerKuru/CVStudio.git
+cd CVStudio
 python -m venv .venv
 .venv\Scripts\activate              # Windows PowerShell
 # source .venv/bin/activate         # Linux / macOS
 pip install -e ".[dev]"
 pytest                              # 472 tests, all passing
-cvsandbox                           # launch the GUI
+cvstudio                            # launch the GUI
 ```
 
 ### Optional: AI extras
@@ -114,14 +114,14 @@ If the `[ai]` extras aren't installed, the AI ops still appear in the catalog bu
 ### CLI
 
 ```bash
-cvsandbox --list                    # registered operation catalog, no UI
-cvsandbox --version
+cvstudio --list                     # registered operation catalog, no UI
+cvstudio --version
 ```
 
 ## Architecture
 
 ```
-src/cvsandbox/
+src/cvstudio/
 ├── core/                  # Domain primitives
 │   ├── operation.py       # OperationSpec + Parameter dataclasses
 │   ├── pipeline.py        # Pipeline (facade over Graph) + Roi
@@ -193,14 +193,14 @@ The AI suite specifically follows one shape — `AIBackend` in `ai/backend.py` o
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-new-operation) for the full recipe. Short version:
 
-1. Add a function plus `OperationSpec` in `src/cvsandbox/operations/<category>.py`.
-2. Register the module in `src/cvsandbox/operations/__init__.py`.
+1. Add a function plus `OperationSpec` in `src/cvstudio/operations/<category>.py`.
+2. Register the module in `src/cvstudio/operations/__init__.py`.
 3. Add a test in `tests/operations/`.
-4. Add a help entry in `src/cvsandbox/core/op_docs.py` (`OP_DOCS["<id>"]`).
+4. Add a help entry in `src/cvstudio/core/op_docs.py` (`OP_DOCS["<id>"]`).
 
 The catalog, parameter panel, and code exporter all pick up the new spec automatically.
 
-To add a new **AI** op: subclass `AIBackend` (or `StreamingAIBackend` for token streams) in `src/cvsandbox/operations/ai.py` and supply the four hook methods — the cache + auth + cancel + display-panel plumbing is inherited for free.
+To add a new **AI** op: subclass `AIBackend` (or `StreamingAIBackend` for token streams) in `src/cvstudio/operations/ai.py` and supply the four hook methods — the cache + auth + cancel + display-panel plumbing is inherited for free.
 
 ## Roadmap
 

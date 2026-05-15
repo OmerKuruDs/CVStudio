@@ -12,7 +12,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 _RETR_MODES = {
     "External": cv2.RETR_EXTERNAL,

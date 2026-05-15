@@ -23,8 +23,8 @@ from typing import Any
 
 import numpy as np
 
-from cvsandbox.ai import streaming
-from cvsandbox.core.operation import OperationSpec
+from cvstudio.ai import streaming
+from cvstudio.core.operation import OperationSpec
 
 NodeId = str
 

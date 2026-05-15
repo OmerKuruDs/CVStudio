@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtCore import QEventLoop, QThread, QTimer
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.pipeline_worker import PipelineRequest, PipelineWorker
+from cvstudio.ui.pipeline_worker import PipelineRequest, PipelineWorker
 
 
 def _add(image: np.ndarray, value: int) -> np.ndarray:

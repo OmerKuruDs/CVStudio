@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from cvsandbox.core.image_io import read_image, to_uint8
+from cvstudio.core.image_io import read_image, to_uint8
 
 
 def test_to_uint8_passes_through_uint8_arrays() -> None:
@@ -73,7 +73,7 @@ def test_read_image_normalises_16bit_tiff(tmp_path: Path) -> None:
 
 
 def test_read_thumbnail_returns_uint8_within_max_dim(tmp_path: Path) -> None:
-    from cvsandbox.core.image_io import read_thumbnail
+    from cvstudio.core.image_io import read_thumbnail
 
     big = np.full((800, 1200, 3), 50, dtype=np.uint8)
     target = tmp_path / "big.png"
@@ -86,7 +86,7 @@ def test_read_thumbnail_returns_uint8_within_max_dim(tmp_path: Path) -> None:
 
 
 def test_read_thumbnail_returns_none_for_missing_file(tmp_path: Path) -> None:
-    from cvsandbox.core.image_io import read_thumbnail
+    from cvstudio.core.image_io import read_thumbnail
 
     assert read_thumbnail(tmp_path / "does_not_exist.png") is None
 

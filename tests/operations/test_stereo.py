@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from cvsandbox.operations.stereo import STEREO_BM, STEREO_SGBM
+from cvstudio.operations.stereo import STEREO_BM, STEREO_SGBM
 
 
 def _stereo_pair(

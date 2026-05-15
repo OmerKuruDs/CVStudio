@@ -1,8 +1,8 @@
 """Domain primitives: operations, parameters, pipelines, registry."""
 
-from cvsandbox.core.operation import OperationSpec, Parameter, ParamKind
-from cvsandbox.core.pipeline import Pipeline, PipelineNode, Roi
-from cvsandbox.core.registry import (
+from cvstudio.core.operation import OperationSpec, Parameter, ParamKind
+from cvstudio.core.pipeline import Pipeline, PipelineNode, Roi
+from cvstudio.core.registry import (
     all_operations,
     get_operation,
     register_operation,

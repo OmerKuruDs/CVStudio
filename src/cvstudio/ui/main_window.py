@@ -39,32 +39,32 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.ai.cache_storage import default_cache_path, load_caches, save_caches
-from cvsandbox.ai.streaming import bus as streaming_bus
-from cvsandbox.core.codegen import generate_python_code
-from cvsandbox.core.image_io import read_image
-from cvsandbox.core.pipeline import Pipeline, Roi
-from cvsandbox.operations import ai as ai_ops
-from cvsandbox.core.registry import get_operation
-from cvsandbox.core.serialization import load as load_pipeline
-from cvsandbox.core.serialization import save as save_pipeline
-from cvsandbox.core.video import VideoRecorder, VideoSource
-from cvsandbox.resources import ICON_PATH
-from cvsandbox.ui.batch_dialog import BatchDialog
-from cvsandbox.ui.code_export_dialog import CodeExportDialog
-from cvsandbox.ui.dataset_page import DatasetPage
-from cvsandbox.ui.help_dialog import HelpDialog
-from cvsandbox.ui.histogram_panel import HistogramPanel
-from cvsandbox.ui.image_action_bar import ImageActionBar
-from cvsandbox.ui.image_tools_panel import ImageToolsPanel
-from cvsandbox.ui.image_view import ImageViewWidget
-from cvsandbox.ui.node_graph_view import NodeGraphView
-from cvsandbox.ui.operation_catalog import OperationCatalog
-from cvsandbox.ui.parameter_panel import ParameterPanel
-from cvsandbox.ui.pipeline_worker import PipelineRequest, PipelineWorker
-from cvsandbox.ui.activity_bar import ActivityBar
-from cvsandbox.ui.video_feed_controller import VideoFeedController
-from cvsandbox.ui.viz_pages import Viz2DPage, Viz3DPage
+from cvstudio.ai.cache_storage import default_cache_path, load_caches, save_caches
+from cvstudio.ai.streaming import bus as streaming_bus
+from cvstudio.core.codegen import generate_python_code
+from cvstudio.core.image_io import read_image
+from cvstudio.core.pipeline import Pipeline, Roi
+from cvstudio.operations import ai as ai_ops
+from cvstudio.core.registry import get_operation
+from cvstudio.core.serialization import load as load_pipeline
+from cvstudio.core.serialization import save as save_pipeline
+from cvstudio.core.video import VideoRecorder, VideoSource
+from cvstudio.resources import ICON_PATH
+from cvstudio.ui.batch_dialog import BatchDialog
+from cvstudio.ui.code_export_dialog import CodeExportDialog
+from cvstudio.ui.dataset_page import DatasetPage
+from cvstudio.ui.help_dialog import HelpDialog
+from cvstudio.ui.histogram_panel import HistogramPanel
+from cvstudio.ui.image_action_bar import ImageActionBar
+from cvstudio.ui.image_tools_panel import ImageToolsPanel
+from cvstudio.ui.image_view import ImageViewWidget
+from cvstudio.ui.node_graph_view import NodeGraphView
+from cvstudio.ui.operation_catalog import OperationCatalog
+from cvstudio.ui.parameter_panel import ParameterPanel
+from cvstudio.ui.pipeline_worker import PipelineRequest, PipelineWorker
+from cvstudio.ui.activity_bar import ActivityBar
+from cvstudio.ui.video_feed_controller import VideoFeedController
+from cvstudio.ui.viz_pages import Viz2DPage, Viz3DPage
 
 DEBOUNCE_MS = 120
 PREVIEW_MAX_DIM = 1600  # longest-side cap for downscaled-preview mode
@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("cvsandbox")
+        self.setWindowTitle("CVStudio")
         self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.resize(1400, 900)
 
@@ -564,7 +564,7 @@ class MainWindow(QMainWindow):
     def _on_run_requested(self, node_id: str) -> None:
         """Authorize a manual-trigger node (currently only the VLM op)
         to spawn its backend call on the next pipeline run."""
-        from cvsandbox.operations import ai as ai_op
+        from cvstudio.operations import ai as ai_op
 
         ai_op.authorize_node(node_id)
 
@@ -895,8 +895,8 @@ class MainWindow(QMainWindow):
 
     def _on_show_help(self) -> None:
         """Open (or focus) the non-modal Operation Guide window."""
-        from cvsandbox.core.pipeline import SOURCE_SPEC
-        from cvsandbox.operations import all_builtin_specs
+        from cvstudio.core.pipeline import SOURCE_SPEC
+        from cvstudio.operations import all_builtin_specs
 
         if self._help_dialog is None:
             specs = (SOURCE_SPEC, *all_builtin_specs())

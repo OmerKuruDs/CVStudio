@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cvsandbox.core.operation import OperationSpec, Parameter
-from cvsandbox.core.pipeline import Pipeline, Roi
-from cvsandbox.core.registry import clear_registry, register_operation
-from cvsandbox.core.serialization import from_dict, load, save, to_dict
+from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.core.pipeline import Pipeline, Roi
+from cvstudio.core.registry import clear_registry, register_operation
+from cvstudio.core.serialization import from_dict, load, save, to_dict
 
 
 def _add(image: np.ndarray, value: int) -> np.ndarray:
@@ -185,9 +185,9 @@ def test_save_then_load_via_file(tmp_path: Path) -> None:
 def test_v2_preserves_user_drawn_multi_input_edge() -> None:
     """An edge added directly through the Graph API (e.g. a drag-to-connect
     wire to a 'b' port) must round-trip — v1 could only express the chain."""
-    from cvsandbox.core.graph import GraphEdge
-    from cvsandbox.core.operation import OperationSpec as _OpSpec
-    from cvsandbox.core.operation import Parameter as _Param
+    from cvstudio.core.graph import GraphEdge
+    from cvstudio.core.operation import OperationSpec as _OpSpec
+    from cvstudio.core.operation import Parameter as _Param
 
     blend = _OpSpec(
         id="serial_test.blend",

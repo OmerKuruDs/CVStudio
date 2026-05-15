@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.operations import load_builtin_operations
-from cvsandbox.ui.operation_catalog import OperationCatalog
+from cvstudio.operations import load_builtin_operations
+from cvstudio.ui.operation_catalog import OperationCatalog
 
 
 def _category_items(catalog: OperationCatalog) -> list[str]:

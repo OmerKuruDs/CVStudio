@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cvsandbox"
+name = "cvstudio"
 version = "0.1.0"
-description = "Interactive OpenCV playground — chain image processing operations with live preview."
+description = "Interactive OpenCV + AI playground — chain image-processing operations with live preview and ask a vision model what the result contains."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 authors = [{ name = "Ömer Kuru" }]
-keywords = ["opencv", "image-processing", "gui", "sandbox", "playground"]
+keywords = ["opencv", "image-processing", "computer-vision", "gui", "sandbox", "playground", "vlm", "clip"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
@@ -38,9 +38,9 @@ dev = [
     "pytest-cov>=5.0",
     "pre-commit>=3.7",
 ]
-# HuggingFace-backed AI operations (CLIP zero-shot classify, future
-# OWL-ViT detection, BLIP captioning, ...). Heavyweight (~5GB on disk
-# once torch is installed), so kept opt-in. Install with:
+# HuggingFace-backed AI operations (CLIP zero-shot classify, OWL-ViT
+# detection, BLIP-2 captioning). Heavyweight (~5GB on disk once torch
+# is installed), so kept opt-in. Install with:
 #   pip install -e .[ai]
 ai = [
     "transformers>=4.40",
@@ -49,14 +49,14 @@ ai = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/OmerKuru/cvsandbox"
-Issues = "https://github.com/OmerKuru/cvsandbox/issues"
+Homepage = "https://github.com/OmerKuru/CVStudio"
+Issues = "https://github.com/OmerKuru/CVStudio/issues"
 
 [project.scripts]
-cvsandbox = "cvsandbox.__main__:main"
+cvstudio = "cvstudio.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cvsandbox"]
+packages = ["src/cvstudio"]
 
 [tool.ruff]
 line-length = 100

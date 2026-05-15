@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.features import (
+from cvstudio.operations.features import (
     FAST,
     HARRIS,
     HOUGH_CIRCLES,

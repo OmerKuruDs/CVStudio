@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.operation import Parameter
+from cvstudio.core.operation import Parameter
 
 
 class ParameterControl(QWidget):

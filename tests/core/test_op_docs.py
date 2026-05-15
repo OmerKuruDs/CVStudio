@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cvsandbox.core.op_docs import (
+from cvstudio.core.op_docs import (
     FEATURE_TOPICS,
     OP_DOCS,
     documented_op_ids,
@@ -8,8 +8,8 @@ from cvsandbox.core.op_docs import (
     get_feature_doc,
     get_op_doc,
 )
-from cvsandbox.core.pipeline import SOURCE_SPEC
-from cvsandbox.operations import all_builtin_specs
+from cvstudio.core.pipeline import SOURCE_SPEC
+from cvstudio.operations import all_builtin_specs
 
 
 def test_every_registered_op_has_documentation() -> None:

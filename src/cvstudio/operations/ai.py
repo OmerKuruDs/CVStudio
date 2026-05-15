@@ -5,7 +5,7 @@ All four current ops follow the same shape: per-image cache keyed by
 the model-affecting params, one-shot Run authorization, daemon-thread
 inference, and a textual reply that lands in the right-side AI Response
 panel via `streaming.set_node_display`. The shared scaffolding lives
-in `cvsandbox.ai.backend.AIBackend`; the concrete classes below only
+in `cvstudio.ai.backend.AIBackend`; the concrete classes below only
 supply the bits that differ — validation, cache key shape, the
 inference call itself, and (for OWL-ViT) the on-image box overlay.
 
@@ -28,8 +28,8 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.ai import hf_blip2, hf_clip, hf_owlvit, streaming
-from cvsandbox.ai.backend import (
+from cvstudio.ai import hf_blip2, hf_clip, hf_owlvit, streaming
+from cvstudio.ai.backend import (
     AIBackend,
     StreamingAIBackend,
     authorize_node,
@@ -51,15 +51,15 @@ def _proxy_runner(target: Any) -> None:
     """Re-resolve `_run_in_thread` at call time so monkeypatching the
     module global flows through to every backend instance."""
     _run_in_thread(target)
-from cvsandbox.ai.hf_clip import HFExtrasMissing
-from cvsandbox.ai.hf_owlvit import Detection
-from cvsandbox.ai.ollama_client import (
+from cvstudio.ai.hf_clip import HFExtrasMissing
+from cvstudio.ai.hf_owlvit import Detection
+from cvstudio.ai.ollama_client import (
     DEFAULT_HOST,
     DEFAULT_MODEL,
     OllamaError,
     stream_generate,
 )
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 # --- shared helpers used by multiple backends ----------------------------
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.arithmetic import (
+from cvstudio.operations.arithmetic import (
     ADD,
     BITWISE_AND,
     BITWISE_OR,

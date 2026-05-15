@@ -14,8 +14,8 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.operation import OperationSpec, Parameter
-from cvsandbox.core.pipeline import coerce_to_match
+from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.core.pipeline import coerce_to_match
 
 
 def _blend(a: np.ndarray, b: np.ndarray, alpha: float) -> np.ndarray:

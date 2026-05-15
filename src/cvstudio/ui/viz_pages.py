@@ -40,8 +40,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from cvsandbox.core.registry import all_operations
-from cvsandbox.ui.visualization_panel import (
+from cvstudio.core.registry import all_operations
+from cvstudio.ui.visualization_panel import (
     DEFAULT_HEATMAP,
     HEATMAP_COLORMAPS,
     _HeatmapMode,

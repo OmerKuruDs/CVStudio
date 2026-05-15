@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.geometric import FLIP, RESIZE, ROTATE
+from cvstudio.operations.geometric import FLIP, RESIZE, ROTATE
 
 
 def test_resize_scales_both_axes() -> None:

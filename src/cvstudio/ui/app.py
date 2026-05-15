@@ -1,6 +1,6 @@
 """QApplication bootstrap.
 
-`run()` is the single entry point used by `cvsandbox.__main__`. It is split out
+`run()` is the single entry point used by `cvstudio.__main__`. It is split out
 from MainWindow construction so tests can build the window without spinning the
 event loop.
 """
@@ -13,9 +13,9 @@ from collections.abc import Sequence
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.operations import load_builtin_operations
-from cvsandbox.resources import ARROW_DOWN_PATH, ARROW_UP_PATH, ICON_PATH, THEME_QSS_PATH
-from cvsandbox.ui.main_window import MainWindow
+from cvstudio.operations import load_builtin_operations
+from cvstudio.resources import ARROW_DOWN_PATH, ARROW_UP_PATH, ICON_PATH, THEME_QSS_PATH
+from cvstudio.ui.main_window import MainWindow
 
 
 def run(argv: Sequence[str] | None = None) -> int:
@@ -26,9 +26,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     # storage) and QSettings (window geometry / splitter sizes). Set
     # them BEFORE creating MainWindow so the first cache load uses the
     # right per-OS directory.
-    app.setOrganizationName("cvsandbox")
-    app.setOrganizationDomain("cvsandbox.local")
-    app.setApplicationName("cvsandbox")
+    app.setOrganizationName("CVStudio")
+    app.setOrganizationDomain("cvstudio.local")
+    app.setApplicationName("CVStudio")
     app.setWindowIcon(QIcon(str(ICON_PATH)))
     if THEME_QSS_PATH.exists():
         qss = THEME_QSS_PATH.read_text(encoding="utf-8")
@@ -51,6 +51,6 @@ def _apply_windows_app_id() -> None:
     try:
         import ctypes
 
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("cvsandbox.app")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("CVStudio.app")
     except (OSError, AttributeError):
         pass

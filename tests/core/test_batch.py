@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from cvsandbox.core.batch import (
+from cvstudio.core.batch import (
     BatchRequest,
     discover_images,
     execute_batch,

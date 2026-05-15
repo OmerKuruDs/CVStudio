@@ -26,8 +26,8 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.graph import Graph, GraphEdge, GraphNode, NodeId
-from cvsandbox.core.operation import OperationSpec
+from cvstudio.core.graph import Graph, GraphEdge, GraphNode, NodeId
+from cvstudio.core.operation import OperationSpec
 
 SOURCE_SPEC = OperationSpec(
     id="source.image",

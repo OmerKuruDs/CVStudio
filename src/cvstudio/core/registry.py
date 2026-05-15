@@ -6,7 +6,7 @@ and pipeline serialization layer look up specs by id through this module.
 
 from __future__ import annotations
 
-from cvsandbox.core.operation import OperationSpec
+from cvstudio.core.operation import OperationSpec
 
 _REGISTRY: dict[str, OperationSpec] = {}
 

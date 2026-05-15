@@ -6,7 +6,7 @@ import pytest
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.ui.code_export_dialog import CodeExportDialog
+from cvstudio.ui.code_export_dialog import CodeExportDialog
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_save_writes_file(
         return str(target), "Python (*.py)"
 
     monkeypatch.setattr(
-        "cvsandbox.ui.code_export_dialog.QFileDialog.getSaveFileName",
+        "cvstudio.ui.code_export_dialog.QFileDialog.getSaveFileName",
         fake_save_dialog,
     )
 

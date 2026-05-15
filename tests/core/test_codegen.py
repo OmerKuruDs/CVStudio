@@ -5,10 +5,10 @@ import ast
 import numpy as np
 import pytest
 
-from cvsandbox.core.codegen import generate_python_code
-from cvsandbox.core.operation import OperationSpec
-from cvsandbox.core.pipeline import Pipeline, Roi
-from cvsandbox.operations import all_builtin_specs, load_builtin_operations
+from cvstudio.core.codegen import generate_python_code
+from cvstudio.core.operation import OperationSpec
+from cvstudio.core.pipeline import Pipeline, Roi
+from cvstudio.operations import all_builtin_specs, load_builtin_operations
 
 
 def _no_export() -> OperationSpec:
@@ -168,7 +168,7 @@ def test_dag_branching_generates_runnable_code_matching_runtime() -> None:
     """Source fans out into Blur and Canny, then a Difference op merges them.
     The exported code must use intermediate variables so each branch is
     addressable, and the result must match Graph.execute byte-for-byte."""
-    from cvsandbox.core.graph import GraphEdge
+    from cvstudio.core.graph import GraphEdge
 
     load_builtin_operations()
     pipe = Pipeline()
@@ -206,6 +206,6 @@ def test_dag_branching_generates_runnable_code_matching_runtime() -> None:
 
 
 def _spec(spec_id: str) -> OperationSpec:
-    from cvsandbox.core.registry import get_operation
+    from cvstudio.core.registry import get_operation
 
     return get_operation(spec_id)

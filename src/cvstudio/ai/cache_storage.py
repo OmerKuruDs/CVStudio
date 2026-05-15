@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cvsandbox.ai.backend import AIBackend
+    from cvstudio.ai.backend import AIBackend
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ CACHE_VERSION = 1
 
 def default_cache_path() -> Path:
     """Resolve the AI cache path via Qt's per-OS app data location.
-    Falls back to ``~/.cvsandbox/ai_cache.json`` when Qt is missing
+    Falls back to ``~/.cvstudio/ai_cache.json`` when Qt is missing
     (e.g. headless CI)."""
     try:
         from PySide6.QtCore import QStandardPaths
@@ -53,7 +53,7 @@ def default_cache_path() -> Path:
             return Path(base) / "ai_cache.json"
     except ImportError:
         pass
-    return Path.home() / ".cvsandbox" / "ai_cache.json"
+    return Path.home() / ".cvstudio" / "ai_cache.json"
 
 
 def save_caches(path: Path, backends: "dict[str, AIBackend]") -> None:

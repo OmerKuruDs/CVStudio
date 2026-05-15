@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from cvsandbox.ai.hf_clip import HFExtrasMissing
+from cvstudio.ai.hf_clip import HFExtrasMissing
 
 DEFAULT_MODEL = "Salesforce/blip2-opt-2.7b"
 

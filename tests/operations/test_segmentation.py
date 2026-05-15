@@ -3,7 +3,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from cvsandbox.operations.segmentation import (
+from cvstudio.operations.segmentation import (
     CONNECTED_COMPONENTS,
     DISTANCE_TRANSFORM,
     GRABCUT,

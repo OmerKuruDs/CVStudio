@@ -34,8 +34,8 @@ from typing import Any, Generic, TypeVar
 
 import numpy as np
 
-from cvsandbox.ai import streaming
-from cvsandbox.ai.hf_clip import HFExtrasMissing
+from cvstudio.ai import streaming
+from cvstudio.ai.hf_clip import HFExtrasMissing
 
 logger = logging.getLogger(__name__)
 

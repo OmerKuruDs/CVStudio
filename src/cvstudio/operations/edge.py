@@ -13,7 +13,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 
 def _to_gray_line(in_var: str, out_var: str) -> str:

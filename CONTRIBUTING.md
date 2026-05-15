@@ -1,4 +1,4 @@
-# Contributing to cvsandbox
+# Contributing to CVStudio
 
 Thanks for your interest. The project's main extension point is **adding new OpenCV operations** — that's the easiest way to contribute and where help is most needed.
 
@@ -15,15 +15,15 @@ pytest
 
 ## Adding a new operation
 
-Each operation lives in `src/cvsandbox/operations/<category>.py` and consists of two things: a pure function `(image, **params) -> image`, and an `OperationSpec` that describes its parameters.
+Each operation lives in `src/cvstudio/operations/<category>.py` and consists of two things: a pure function `(image, **params) -> image`, and an `OperationSpec` that describes its parameters.
 
 **Example — adding `cv2.medianBlur`:**
 
 ```python
-# src/cvsandbox/operations/filtering.py
+# src/cvstudio/operations/filtering.py
 import cv2
 import numpy as np
-from cvsandbox.core.operation import OperationSpec, Parameter
+from cvstudio.core.operation import OperationSpec, Parameter
 
 
 def _median_blur(image: np.ndarray, ksize: int) -> np.ndarray:
@@ -53,7 +53,7 @@ MEDIAN_BLUR = OperationSpec(
 ALL = (GAUSSIAN_BLUR, MEDIAN_BLUR)  # append your new spec here
 ```
 
-Registration happens in `src/cvsandbox/operations/__init__.py` via `load_builtin_operations()`, which iterates each module's `ALL` tuple. Modules must not register at import time — keep the module side-effect free and just append to `ALL`.
+Registration happens in `src/cvstudio/operations/__init__.py` via `load_builtin_operations()`, which iterates each module's `ALL` tuple. Modules must not register at import time — keep the module side-effect free and just append to `ALL`.
 
 **Tests:** add a corresponding `tests/operations/test_filtering.py` entry that runs the operation on a deterministic synthetic image and asserts shape + a basic property (e.g. "output mean is close to input mean", "edges are present after Canny").
 

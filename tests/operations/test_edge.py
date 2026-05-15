@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from cvsandbox.operations.edge import CANNY, LAPLACIAN, SCHARR, SOBEL
+from cvstudio.operations.edge import CANNY, LAPLACIAN, SCHARR, SOBEL
 
 
 def _vertical_step() -> np.ndarray:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QApplication
 
-from cvsandbox.core.operation import Parameter
-from cvsandbox.ui.parameter_widgets import (
+from cvstudio.core.operation import Parameter
+from cvstudio.ui.parameter_widgets import (
     BoolControl,
     ChoiceControl,
     FloatControl,
