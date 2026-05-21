@@ -263,6 +263,88 @@ def test_multi_input_node_stacks_ports_vertically(qapp: QApplication) -> None:
     assert centres[0].y() != centres[1].y()  # stacked, not overlapping
 
 
+def test_default_terminal_node_is_last_chain_op(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    widget = NodeGraphView(pipeline)
+    chain = _chain_items(widget)
+    assert chain[-1].is_output_terminal is True
+    assert chain[0].is_output_terminal is False
+
+
+def test_set_as_output_signal_changes_terminal_node(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    alpha = pipeline.add(_spec("test.a", "Alpha"))
+    pipeline.add(_spec("test.b", "Beta"))
+    widget = NodeGraphView(pipeline)
+    chain = _chain_items(widget)
+
+    fired: list[None] = []
+    widget.pipeline_changed.connect(lambda: fired.append(None))
+
+    alpha_item = chain[0]
+    # Use the underlying signal directly; the QMenu side of the interaction
+    # needs a real screen, so we exercise the handler not the menu rendering.
+    alpha_item.set_as_output_requested.emit(alpha_item.index)
+
+    assert pipeline.graph.output_node_id == alpha.id
+    assert fired, "pipeline_changed must fire so main_window re-dispatches preview"
+
+    new_chain = _chain_items(widget)
+    assert new_chain[0].is_output_terminal is True
+    assert new_chain[1].is_output_terminal is False
+
+
+def test_set_as_output_ignores_source_node(qapp: QApplication) -> None:
+    pipeline = Pipeline()
+    pipeline.add(_spec("test.a", "Alpha"))
+    widget = NodeGraphView(pipeline)
+    source_item = next(item for item in widget._nodes if item.is_source)
+
+    before = pipeline.graph.output_node_id
+    source_item.set_as_output_requested.emit(source_item.index)
+    # Source must not become the terminal — Graph.execute returns the
+    # terminal's first output, and Source is a zero-input passthrough.
+    assert pipeline.graph.output_node_id == before
+
+
+def test_three_input_node_lays_three_ports_inside_body(qapp: QApplication) -> None:
+    """Regression for Phase 2 (seamless_clone) — the first op with three input
+    ports. All three port centres must sit inside the node's vertical extent
+    so they remain visible and hit-testable; ports must not overlap."""
+    from cvstudio.ui.node_graph_view import NODE_HEIGHT, PORT_GAP, PORT_RADIUS
+
+    three_in_spec = OperationSpec(
+        id="test.three_in",
+        name="SeamlessClone",
+        category="Test",
+        description="",
+        parameters=(),
+        func=lambda src, dst, mask: dst,
+        input_ports=("src", "dst", "mask"),
+    )
+    pipeline = Pipeline()
+    pipeline.add(three_in_spec)
+    widget = NodeGraphView(pipeline)
+    node = _chain_items(widget)[0]
+    centres = node._port_centers(node.input_ports, side="left")
+
+    assert len(centres) == 3
+    # Sorted top-to-bottom, evenly spaced by PORT_GAP, centred on the node.
+    ys = [c.y() for c in centres]
+    assert ys == sorted(ys), "ports must be ordered top to bottom"
+    assert ys[1] - ys[0] == PORT_GAP
+    assert ys[2] - ys[1] == PORT_GAP
+    midpoint = (ys[0] + ys[2]) / 2
+    assert abs(midpoint - NODE_HEIGHT / 2) < 1e-6, "ports must be vertically centred"
+    # Each port circle (centre ± PORT_RADIUS) must remain inside [0, NODE_HEIGHT]
+    # so it actually shows on the body — a layout regression that pushed ports
+    # off-screen would break drag-to-connect.
+    assert ys[0] - PORT_RADIUS >= 0
+    assert ys[2] + PORT_RADIUS <= NODE_HEIGHT
+
+
 def _multi_input_spec(name: str = "Blend") -> OperationSpec:
     return OperationSpec(
         id=f"test.{name.lower()}",

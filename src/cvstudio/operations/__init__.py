@@ -26,6 +26,7 @@ from cvstudio.operations import (
     morphology,
     segmentation,
     stereo,
+    synthesis,
     threshold,
 )
 
@@ -43,6 +44,7 @@ _BUILTIN_MODULES = (
     segmentation,
     arithmetic,
     stereo,
+    synthesis,
     ai,
 )
 

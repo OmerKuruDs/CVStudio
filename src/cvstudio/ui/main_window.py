@@ -19,6 +19,7 @@ source image) calls `_request_preview` which schedules the next run.
 
 from __future__ import annotations
 
+import copy
 import random
 from pathlib import Path
 
@@ -1030,17 +1031,16 @@ class MainWindow(QMainWindow):
             self._viz_3d_page.clear()
             self._pipeline_view.clear_timings()
             return
-        steps = tuple(
-            (node.spec.func, dict(node.params), node.id)
-            for node in self._pipeline.nodes
-            if node.enabled
-        )
+        # Deep-copy so the worker thread never observes mid-edit state — the
+        # user can keep dragging sliders / wiring ports while this request
+        # runs without races on `node.params` or `graph._edges`.
+        snapshot = copy.deepcopy(self._pipeline)
         self._next_request_id += 1
         self._latest_request_id = self._next_request_id
         request = PipelineRequest(
             request_id=self._next_request_id,
             image=self._preview_source,
-            steps=steps,
+            pipeline=snapshot,
             roi=self._pipeline_roi_in_preview_coords(),
             roi_paste_to=self._pipeline_paste_in_preview_coords(),
         )
@@ -1067,16 +1067,14 @@ class MainWindow(QMainWindow):
             self._video_controller.mark_processed()
 
     def _apply_timings(self, timings: object) -> None:
-        """Map an enabled-only timings tuple back to per-pipeline-node timings."""
-        if not isinstance(timings, tuple):
+        """Look up each pipeline node's measured time from the worker's
+        per-node timing dict (keyed by node id). Nodes that did not run —
+        disabled, or unreachable in the snapshot's DAG — get None."""
+        if not isinstance(timings, dict):
             return
-        per_node: list[float | None] = []
-        iterator = iter(timings)
-        for node in self._pipeline.nodes:
-            if node.enabled:
-                per_node.append(next(iterator, None))
-            else:
-                per_node.append(None)
+        per_node: list[float | None] = [
+            timings.get(node.id) for node in self._pipeline.nodes
+        ]
         self._pipeline_view.set_timings(per_node)
 
     def _on_worker_failed(self, request_id: int, message: str) -> None:

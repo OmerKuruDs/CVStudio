@@ -878,23 +878,35 @@ def test_every_ai_op_exposes_auto_run_param() -> None:
         assert param.default is False
 
 
-def test_pipeline_worker_sets_current_node_around_each_call() -> None:
-    """The worker's thread-local plumbing is what makes
-    `cancel_node_streams_except` meaningful — verify each step sees its
-    node_id and that the local is cleared between steps."""
-    from cvstudio.ui.pipeline_worker import PipelineWorker
+def test_pipeline_execution_sets_current_node_around_each_call() -> None:
+    """The DAG executor's thread-local plumbing is what makes
+    `cancel_node_streams_except` meaningful — verify each node's `func` sees
+    its node_id at call time and that the local is cleared between calls."""
+    from cvstudio.core.operation import OperationSpec
+    from cvstudio.core.pipeline import Pipeline
 
     observed: list[str | None] = []
 
-    def _record(image: np.ndarray, **_params: object) -> np.ndarray:
+    def _record(image: np.ndarray) -> np.ndarray:
         observed.append(streaming.current_node())
         return image
 
-    image = np.zeros((4, 4), dtype=np.uint8)
-    steps = ((_record, {}, "nA"), (_record, {}, "nB"))
-    PipelineWorker._run_steps(image, steps)  # type: ignore[arg-type]
-    assert observed == ["nA", "nB"]
-    # After the loop, the thread-local must be cleared.
+    record_spec = OperationSpec(
+        id="test.record_current_node",
+        name="Record",
+        category="Test",
+        description="Record streaming.current_node() at call time.",
+        parameters=(),
+        func=_record,
+    )
+
+    pipe = Pipeline()
+    node_a = pipe.add(record_spec)
+    node_b = pipe.add(record_spec)
+    pipe.execute(np.zeros((4, 4), dtype=np.uint8))
+
+    assert observed == [node_a.id, node_b.id]
+    # After execution, the thread-local must be cleared.
     assert streaming.current_node() is None
 
 

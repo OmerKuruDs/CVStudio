@@ -16,8 +16,10 @@ multi-input ops, and dead-branch culling — they just have no UI yet.
 from __future__ import annotations
 
 import contextlib
+import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -166,7 +168,19 @@ class Graph:
 
     # ------------------------------------------------------------------ execute
 
-    def execute(self, image: np.ndarray) -> np.ndarray:
+    def execute(
+        self,
+        image: np.ndarray,
+        *,
+        on_step_timed: Callable[[NodeId, float], None] | None = None,
+    ) -> np.ndarray:
+        """Run the graph and return the terminal node's first output.
+
+        ``on_step_timed`` is invoked once per executed node with the node id
+        and the wall-clock seconds its ``func`` consumed. Disabled and
+        source-style nodes are skipped — the hook is only called for nodes
+        whose ``func`` actually ran. Useful for per-node timing HUDs.
+        """
         if not self._nodes:
             return image.copy()
         order = self.topological_order()
@@ -199,10 +213,13 @@ class Graph:
                 continue
 
             streaming.set_current_node(nid)
+            t0 = time.perf_counter()
             try:
                 result = node.call(*input_args)
             finally:
                 streaming.set_current_node(None)
+            if on_step_timed is not None:
+                on_step_timed(nid, time.perf_counter() - t0)
 
             if len(node.spec.output_ports) == 1:
                 outputs[nid] = {node.spec.output_ports[0]: result}  # type: ignore[dict-item]

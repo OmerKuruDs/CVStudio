@@ -881,6 +881,96 @@ port.</p>
       Blur output on b)</b> isolates the high-frequency detail.</li>
 </ul>
 """,
+    "composite.inpaint": """
+<h2>Inpaint</h2>
+<p><i>composite.inpaint · category: Composite · multi-input</i></p>
+<p>Reconstructs pixels of <code>image</code> underneath <code>mask</code> by
+propagating intact neighbours into the masked region. The mask is
+automatically binarised and resized to the image. Both methods need a
+uint8 image; BGRA inputs lose their alpha first.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Method</b> — <code>telea</code> (fast-marching, sharper edges) or
+      <code>ns</code> (Navier-Stokes, smoother continuation through
+      texture).</li>
+  <li><b>Radius</b> — neighbourhood radius in pixels each masked point pulls
+      from. Larger = smoother fill, slower.</li>
+</ul>
+<h3>Where it shines</h3>
+<ul>
+  <li>Synthesising "defect-free" reference images from a defective sample —
+      threshold the defect, paint it back out, get a clean substrate to
+      composite onto later.</li>
+  <li>Scratch / watermark / occluder removal.</li>
+  <li>Building synthetic ground truth: <b>Threshold → Morphology Close →
+      Inpaint</b> gives you the "what would this look like without the
+      defect" image for diff-based labelling.</li>
+</ul>
+""",
+    "composite.mask_paste": """
+<h2>Mask Paste</h2>
+<p><i>composite.mask_paste · category: Composite · multi-input</i></p>
+<p>Paints a constant <code>fill_value</code> into <code>dst</code> wherever
+<code>mask</code> exceeds the threshold. Unlike Blend or Seamless Clone this
+is a hard stencil — the surrounding texture is untouched, so the result
+reads as a real geometric mark rather than a transferred patch.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Mask Threshold</b> — mask pixels strictly above this value are
+      painted; everything else passes through unchanged.</li>
+  <li><b>Fill Value</b> — intensity stamped into painted pixels, broadcast
+      across all channels (so it stays achromatic).</li>
+</ul>
+<h3>Where it shines</h3>
+<ul>
+  <li>Synthetic defect stamping: extract a defect-shaped mask from one
+      sample and paint it black onto a clean substrate — texture stays
+      believable because only the silhouette is altered.</li>
+  <li>Hard occlusion masks for training data — burn in a known shape so a
+      downstream model has to learn to handle it.</li>
+  <li>Quick "delete this region" pass before sending the result through a
+      smarter inpainter.</li>
+</ul>
+""",
+    "composite.seamless_clone": """
+<h2>Seamless Clone</h2>
+<p><i>composite.seamless_clone · category: Composite · 3-input</i></p>
+<p>Poisson image editing (<code>cv2.seamlessClone</code>) — pastes the
+mask-shaped region of <code>src</code> into <code>dst</code> so its gradients
+blend into the destination's lighting and colour. Unlike Blend (linear alpha
+mix) or Mask Paste (hard stencil) this preserves <code>src</code>'s texture
+while matching <code>dst</code>'s surrounding tone, so even noticeable patches
+fuse without a visible seam.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Mode</b> — <code>normal</code> preserves src colours; <code>mixed</code>
+      picks the stronger gradient at each pixel (good for textured dst);
+      <code>monochrome_transfer</code> ignores src colour and copies only
+      luminance.</li>
+  <li><b>Auto centre</b> — on by default. Places the patch at the mask's
+      centroid (<code>cv2.moments</code>). Turn off to override.</li>
+  <li><b>Centre X / Y</b> — destination coordinates for the patch (used only
+      when Auto centre is off). Automatically clamped so the patch always fits
+      inside dst, regardless of the entered value.</li>
+</ul>
+<h3>Where it shines</h3>
+<ul>
+  <li>Synthetic defect placement: extract a real defect (src + mask), paste it
+      onto a clean substrate (dst). The lighting of the substrate carries over,
+      so the defect looks natural instead of "stickered on".</li>
+  <li>Photo retouching: drop an object from one image into another with
+      believable shadow/lighting.</li>
+  <li>Dataset augmentation: feed the same donor patch into many backgrounds at
+      varied centres to grow a labelled training set.</li>
+</ul>
+<h3>Gotchas</h3>
+<ul>
+  <li>src and mask are auto-resized so they share H,W — but src must not be
+      larger than dst in either dimension, or there is no valid centre and
+      cv2 will raise.</li>
+  <li>An empty mask (all zeros) returns dst unchanged.</li>
+</ul>
+""",
     # ---------------------------------------------------------------- Features
     "features.harris": """
 <h2>Harris Corners</h2>
@@ -1607,6 +1697,73 @@ unchanged.</p>
       cache instantly.</li>
   <li>BLIP-2 is CPU-tolerant but slow; on a 12 GB GPU expect
       ~1-2 seconds per caption with the default checkpoint.</li>
+</ul>
+""",
+    # --------------------------------------------------------------- Synthesis
+    "synthesis.boundary_extract": """
+<h2>Boundary Extract</h2>
+<p><i>synthesis.boundary_extract · category: Synthesis</i></p>
+<p>Threshold the input, find every external contour, draw them as a thin
+line mask. Useful as a precursor to defect-geometry workflows where you
+care about edge shape rather than fill.</p>
+""",
+    "synthesis.boundary_smooth": """
+<h2>Boundary Smooth</h2>
+<p><i>synthesis.boundary_smooth · category: Synthesis</i></p>
+<p>Approximate the largest contour with a polygon
+(<code>cv2.approxPolyDP</code>) and re-fill it. Acts as a 'ground-truth'
+generator: feed it the defective binary, get back what the same shape
+would look like without the defects. Pair with <b>Defect Extract</b> to
+isolate only the defective region.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Epsilon factor</b> — fraction of the contour's arc length used as
+      approxPolyDP's epsilon. Small = follow closely. Large = aggressive
+      smoothing.</li>
+</ul>
+""",
+    "synthesis.defect_extract": """
+<h2>Defect Extract</h2>
+<p><i>synthesis.defect_extract · category: Synthesis · multi-input</i></p>
+<p>Binarises both inputs and returns their absolute difference. Wire the
+defective binary into <code>defective</code> and the smoothed reference
+into <code>reference</code> — the result is exactly the defect's
+geometry, ready to feed Seamless Clone or Copy Paste Defect.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Dilate iterations</b> — optionally thicken the extracted mask so
+      downstream blending has a softer transition.</li>
+</ul>
+""",
+    "synthesis.copy_paste_defect": """
+<h2>Copy Paste Defect</h2>
+<p><i>synthesis.copy_paste_defect · category: Synthesis · 3-input · stochastic</i></p>
+<p>Cut-Paste-Learn style data augmentation. Crops the masked region of
+<code>defect_patch</code>, jitters its rotation / scale / position, and
+stamps it onto <code>background</code>. The <b>seed</b> parameter makes
+each variant reproducible — change it to explore the augmentation space,
+keep it fixed to recall the exact same result.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Position jitter (px)</b> — max ± offset from background centre.</li>
+  <li><b>Rotation jitter (°)</b> — max ± rotation in degrees.</li>
+  <li><b>Scale jitter</b> — max ± scale multiplier (0.2 = 0.8x .. 1.2x).</li>
+  <li><b>Seed</b> — RNG seed. Same params + same seed = same output.</li>
+</ul>
+""",
+    "synthesis.perlin_noise_overlay": """
+<h2>Perlin Noise Overlay</h2>
+<p><i>synthesis.perlin_noise_overlay · category: Synthesis · stochastic</i></p>
+<p>Adds fractal value-noise (a cheap Perlin stand-in) to the image —
+useful for simulating texture variation without altering geometry.
+Layers low-resolution white noise at <code>octaves</code> different
+frequencies, scaled and summed with halved amplitude per octave.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Scale</b> — base feature size. Larger = smoother / lower frequency.</li>
+  <li><b>Octaves</b> — number of frequency layers. More = richer detail, slower.</li>
+  <li><b>Amplitude</b> — strength of the overlay. 0 = no change, 1 = ±127 swing.</li>
+  <li><b>Seed</b> — RNG seed. Same params + same seed = same noise field.</li>
 </ul>
 """,
 }

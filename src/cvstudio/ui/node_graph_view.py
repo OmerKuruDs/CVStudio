@@ -37,8 +37,10 @@ from PySide6.QtWidgets import (
     QGraphicsObject,
     QGraphicsPathItem,
     QGraphicsScene,
+    QGraphicsSceneContextMenuEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
+    QMenu,
     QStyleOptionGraphicsItem,
     QWidget,
 )
@@ -66,6 +68,9 @@ PORT_BORDER = QColor("#0e7490")
 
 DISABLED_ALPHA = 110
 
+OUTPUT_TERMINAL_BORDER = QColor("#16a34a")  # emerald green — preview anchor
+OUTPUT_TERMINAL_BORDER_WIDTH = 3
+
 _CATEGORY_COLORS: dict[str, QColor] = {
     "Filtering": QColor("#67e8f9"),   # bright cyan
     "Threshold": QColor("#86efac"),   # pastel mint
@@ -75,6 +80,7 @@ _CATEGORY_COLORS: dict[str, QColor] = {
     "Geometric": QColor("#7dd3fc"),    # sky
     "Analysis": QColor("#fde68a"),     # pastel yellow
     "Composite": QColor("#a78bfa"),    # vivid violet
+    "Synthesis": QColor("#f472b6"),    # vivid pink — stands out from Composite
     "Source": QColor("#94a3b8"),       # slate
 }
 _DEFAULT_CATEGORY_COLOR = QColor("#cbd5e1")
@@ -108,6 +114,10 @@ class NodeItem(QGraphicsObject):
     drag_released = Signal(int)
     output_port_pressed = Signal(int, str)
     input_port_pressed = Signal(int, str)
+    set_as_output_requested = Signal(int)
+    """Fired when the user picks the right-click 'Set as preview output'
+    action. Caller updates pipeline.graph.output_node_id and refreshes the
+    view so the green terminal border reflects the new anchor."""
 
     def __init__(
         self,
@@ -129,6 +139,7 @@ class NodeItem(QGraphicsObject):
         self.enabled = enabled
         self.timing: float | None = None
         self.selected = False
+        self.is_output_terminal = False
         self.input_ports = input_ports
         self.output_ports = output_ports
         self.is_source = is_source
@@ -172,8 +183,18 @@ class NodeItem(QGraphicsObject):
             body_color.setAlpha(DISABLED_ALPHA)
         painter.setBrush(QBrush(body_color))
 
-        border_color = QColor("#0891b2") if self.selected else QColor("#94a3b8")
-        border_width = 3 if self.selected else 1
+        # Precedence: selected > output-terminal > default. Selection wins so
+        # the user always sees "which node am I currently editing", but a
+        # terminal node still gets its green frame when it isn't selected.
+        if self.selected:
+            border_color = QColor("#0891b2")
+            border_width = 3
+        elif self.is_output_terminal:
+            border_color = OUTPUT_TERMINAL_BORDER
+            border_width = OUTPUT_TERMINAL_BORDER_WIDTH
+        else:
+            border_color = QColor("#94a3b8")
+            border_width = 1
         painter.setPen(QPen(border_color, border_width))
         painter.drawRoundedRect(rect, 10, 10)
 
@@ -353,6 +374,22 @@ class NodeItem(QGraphicsObject):
             self.moved.emit()
         return super().itemChange(change, value)
 
+    def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent) -> None:  # noqa: N802 (Qt override)
+        # The Source node is conceptually always-on and never the preview
+        # terminal — skip the menu rather than offer a no-op action.
+        if self.is_source:
+            event.ignore()
+            return
+        menu = QMenu()
+        action = menu.addAction("Set as preview output")
+        if self.is_output_terminal:
+            action.setEnabled(False)
+            action.setText("Already the preview output")
+        chosen = menu.exec(event.screenPos())
+        if chosen is action and not self.is_output_terminal:
+            self.set_as_output_requested.emit(self.index)
+        event.accept()
+
 
 class EdgeItem(QGraphicsPathItem):
     """Bezier connector between two NodeItems' typed ports."""
@@ -467,6 +504,20 @@ class NodeGraphView(QGraphicsView):
             item.drag_released.connect(self._on_node_drag_released)
             item.output_port_pressed.connect(self._on_output_port_pressed)
             item.input_port_pressed.connect(self._on_input_port_pressed)
+            item.set_as_output_requested.connect(self._on_set_as_output_requested)
+
+        # Mark the current terminal node (the one whose output the preview
+        # reflects). Defaults to the last chain entry; the user can override
+        # via the node context menu. The flag drives the green border in paint.
+        terminal_id = (
+            self._pipeline.graph.output_node_id
+            if self._pipeline.graph.output_node_id is not None
+            else (self._pipeline.nodes[-1].id if self._pipeline.nodes else None)
+        )
+        for node_item in self._nodes:
+            node_item.is_output_terminal = (
+                terminal_id is not None and node_item.node_id == terminal_id
+            )
 
         # Render every edge that the underlying Graph currently holds — chain
         # edges plus any user-drawn multi-input wires.
@@ -535,6 +586,19 @@ class NodeGraphView(QGraphicsView):
         # clicking the Source node clears the param panel (chain index = -1).
         node_id = self._nodes[index].node_id
         self.selection_changed.emit(self._pipeline.chain_index_of(node_id))
+
+    def _on_set_as_output_requested(self, index: int) -> None:
+        if not (0 <= index < len(self._nodes)):
+            return
+        node_item = self._nodes[index]
+        # Source nodes can't be the terminal — Graph.execute returns the
+        # terminal node's first output, but Source-style nodes are zero-input
+        # passthroughs. Guard against accidental wiring.
+        if node_item.is_source:
+            return
+        self._pipeline.graph.output_node_id = node_item.node_id
+        self.refresh()
+        self.pipeline_changed.emit()
 
     def _on_node_toggled(self, index: int) -> None:
         if not (0 <= index < len(self._nodes)):

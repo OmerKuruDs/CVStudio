@@ -19,7 +19,7 @@ constructs nodes directly still works.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -287,9 +287,14 @@ class Pipeline:
 
     # ------------------------------------------------------------------ execute
 
-    def execute(self, image: np.ndarray) -> np.ndarray:
+    def execute(
+        self,
+        image: np.ndarray,
+        *,
+        on_step_timed: Callable[[NodeId, float], None] | None = None,
+    ) -> np.ndarray:
         if self.roi is None:
-            return self._graph.execute(image.copy())
+            return self._graph.execute(image.copy(), on_step_timed=on_step_timed)
 
         clipped = self.roi.clipped_to(image.shape)
         if clipped is None:
@@ -299,7 +304,7 @@ class Pipeline:
             clipped.y : clipped.y + clipped.height,
             clipped.x : clipped.x + clipped.width,
         ].copy()
-        processed = self._graph.execute(crop)
+        processed = self._graph.execute(crop, on_step_timed=on_step_timed)
         processed = coerce_to_match(processed, image)
 
         dst_x, dst_y = (
