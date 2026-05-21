@@ -1751,6 +1751,41 @@ keep it fixed to recall the exact same result.</p>
   <li><b>Seed</b> — RNG seed. Same params + same seed = same output.</li>
 </ul>
 """,
+    "synthesis.grain_flattening": """
+<h2>Grain Flattening</h2>
+<p><i>synthesis.grain_flattening · category: Synthesis · stochastic</i></p>
+<p>Synthetic 'tanecik yassılaşması' (grain flattening) defect — simulates
+mechanical-pressure crushing of metal grain structure. Directional motion
+blur smears texture along one axis, a directional morph close merges
+adjacent grain boundaries, a local contrast drop produces the matte
+appearance of flattened grains, and a feathered alpha blend dissolves the
+ROI edge so there is no boxy seam.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Direction</b> — <code>horizontal</code> or <code>vertical</code>:
+      axis along which grains are smeared.</li>
+  <li><b>Intensity</b> — [0.0 .. 1.0]. Drives motion-blur kernel size
+      (3 → 21 px) and contrast drop (α from 1.00 down to 0.85).</li>
+  <li><b>Feather</b> — [0.0 .. 0.5]: share of each ROI side that fades
+      into the surround. Larger = softer transition.</li>
+  <li><b>Seed</b> — RNG seed for the auto-ROI sampler. Same seed = same
+      ROI = same output.</li>
+</ul>
+<h3>Where it shines</h3>
+<ul>
+  <li>Industrial-CV training data augmentation — grow a defective-sample
+      training set from a small clean-reference corpus.</li>
+  <li>Preview a defect type interactively before scripting batch
+      generation.</li>
+</ul>
+<h3>For dataset generation</h3>
+<p>Call <code>cvstudio.defects.inject_grain_flattening</code> directly
+from a script — the library function returns
+<code>(image, GrainFlatteningLabel)</code> where the label carries the
+YOLO-normalised bbox you write to the <code>.txt</code> annotation file.
+The UI op here drops the label since the pipeline contract is a single
+ndarray.</p>
+""",
     "synthesis.perlin_noise_overlay": """
 <h2>Perlin Noise Overlay</h2>
 <p><i>synthesis.perlin_noise_overlay · category: Synthesis · stochastic</i></p>

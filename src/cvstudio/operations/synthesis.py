@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 
 from cvstudio.core.operation import OperationSpec, Parameter
+from cvstudio.defects.grain_flattening import inject_grain_flattening
 
 
 # --------------------------------------------------------------- boundary_extract
@@ -500,10 +501,111 @@ PERLIN_NOISE_OVERLAY = OperationSpec(
 )
 
 
+# --------------------------------------------------------------- grain_flattening
+
+
+def _grain_flattening_op(
+    image: np.ndarray,
+    angle_degrees: float,
+    intensity: float,
+    feather_fraction: float,
+    fill_roi: bool,
+    seed: int,
+) -> np.ndarray:
+    """Pipeline wrapper around ``cvstudio.defects.inject_grain_flattening``.
+
+    Drops the label tuple — the pipeline contract is a single ndarray. Use
+    the library function directly when you need the YOLO label metadata.
+
+    When ``fill_roi`` is True the entire input is treated as the defect
+    region; combine with cvstudio's mouse-drawn pipeline ROI to flatten
+    exactly the area you painted. When False the op picks its own sub-ROI
+    centred on a Canny edge pixel — useful for full-image previews."""
+    out, _ = inject_grain_flattening(
+        image,
+        angle_degrees=float(angle_degrees),
+        intensity=float(intensity),
+        feather_fraction=float(feather_fraction),
+        fill_roi=bool(fill_roi),
+        seed=int(seed),
+    )
+    return out
+
+
+def _grain_flattening_op_code(
+    params: dict[str, Any], input_vars: tuple[str, ...], output_var: str
+) -> list[str]:
+    (image,) = input_vars
+    angle = float(params["angle_degrees"])
+    intensity = float(params["intensity"])
+    feather = float(params["feather_fraction"])
+    fill = bool(params["fill_roi"])
+    seed = int(params["seed"])
+    return [
+        "from cvstudio.defects import inject_grain_flattening",
+        f"{output_var}, _label = inject_grain_flattening(",
+        f"    {image},",
+        f"    angle_degrees={angle},",
+        f"    intensity={intensity},",
+        f"    feather_fraction={feather},",
+        f"    fill_roi={fill},",
+        f"    seed={seed},",
+        ")",
+    ]
+
+
+GRAIN_FLATTENING = OperationSpec(
+    id="synthesis.grain_flattening",
+    name="Grain Flattening",
+    category="Synthesis",
+    description=(
+        "Inject a synthetic grain-flattening defect — directional motion "
+        "blur + morph close + local contrast drop, feathered so there is no "
+        "boxy seam. Draw a pipeline ROI on the image (toolbar → Select ROI) "
+        "and keep 'Fill ROI' on to flatten exactly that region; turn it off "
+        "to let the op auto-pick a small sub-ROI on a Canny edge. Angle is a "
+        "free 0°–180° slider, not just horizontal/vertical."
+    ),
+    parameters=(
+        Parameter(
+            name="angle_degrees", kind="float", default=0.0, min=0.0, max=180.0, step=1.0,
+            label="Angle (°)",
+            description="Smear angle. 0° = horizontal, 90° = vertical, anything else = diagonal.",
+        ),
+        Parameter(
+            name="intensity", kind="float", default=0.5, min=0.0, max=1.0, step=0.05,
+            label="Intensity",
+            description="Severity — drives motion-blur kernel size and contrast drop.",
+        ),
+        Parameter(
+            name="feather_fraction", kind="float", default=0.3, min=0.0, max=0.5, step=0.05,
+            label="Feather",
+            description="Share of each ROI side that fades into the surround.",
+        ),
+        Parameter(
+            name="fill_roi", kind="bool", default=True,
+            label="Fill ROI",
+            description=(
+                "ON = flatten the entire input (pair with a mouse-drawn "
+                "pipeline ROI). OFF = auto-pick a sub-ROI on a Canny edge."
+            ),
+        ),
+        Parameter(
+            name="seed", kind="int", default=0, min=0, max=999999, step=1,
+            label="Seed",
+            description="RNG seed — only consulted when Fill ROI is OFF (auto-ROI sampler).",
+        ),
+    ),
+    func=_grain_flattening_op,
+    code_export=_grain_flattening_op_code,
+)
+
+
 ALL: tuple[OperationSpec, ...] = (
     BOUNDARY_EXTRACT,
     BOUNDARY_SMOOTH,
     DEFECT_EXTRACT,
     COPY_PASTE_DEFECT,
     PERLIN_NOISE_OVERLAY,
+    GRAIN_FLATTENING,
 )
