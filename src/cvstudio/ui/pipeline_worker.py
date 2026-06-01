@@ -30,10 +30,11 @@ class PipelineRequest:
     pipeline: Pipeline
     """Snapshot of the pipeline — the caller must deep-copy before constructing
     this request so the worker thread never observes mid-edit state."""
-    roi: tuple[int, int, int, int] | None = None
-    """(x, y, w, h) in `image`'s coordinate space. When set, overrides
-    `pipeline.roi` for this request. None = use the snapshot's own roi (which
-    is typically already None)."""
+    roi: tuple[int, int, int, int, float] | None = None
+    """(x, y, w, h, angle_degrees) in `image`'s coordinate space. When set,
+    overrides `pipeline.roi` for this request. None = use the snapshot's own
+    roi (which is typically already None). `angle` is rotation of the rect
+    around its centre, CCW positive; 0 keeps the legacy axis-aligned path."""
     roi_paste_to: tuple[int, int] | None = None
 
 
@@ -53,8 +54,8 @@ class PipelineWorker(QObject):
         try:
             pipe = request.pipeline
             if request.roi is not None:
-                x, y, w, h = request.roi
-                pipe.roi = Roi(x=x, y=y, width=w, height=h)
+                x, y, w, h, angle = request.roi
+                pipe.roi = Roi(x=x, y=y, width=w, height=h, angle=angle)
                 pipe.roi_paste_to = request.roi_paste_to
 
             timings: dict[NodeId, float] = {}

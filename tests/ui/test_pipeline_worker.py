@@ -166,7 +166,7 @@ def test_worker_applies_roi_crop_and_splice(qapp: QApplication) -> None:
             request_id=1,
             image=image,
             pipeline=pipe,
-            roi=(2, 2, 4, 4),
+            roi=(2, 2, 4, 4, 0.0),
         )
         worker.execute(request)
         _wait_for(lambda: bool(received))
@@ -198,7 +198,7 @@ def test_worker_with_roi_returns_source_on_shape_change(qapp: QApplication) -> N
             request_id=2,
             image=image,
             pipeline=pipe,
-            roi=(2, 2, 4, 4),
+            roi=(2, 2, 4, 4, 0.0),
         )
         worker.execute(request)
         _wait_for(lambda: bool(received))

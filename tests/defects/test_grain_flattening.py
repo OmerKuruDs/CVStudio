@@ -82,11 +82,13 @@ def test_horizontal_vs_vertical_produce_different_results() -> None:
     assert not np.array_equal(out_h, out_v)
 
 
-def test_horizontal_smear_makes_row_variance_drop_more_than_column_variance() -> None:
-    """Horizontal motion blur smears along rows — adjacent pixels on a row
-    should become more similar than adjacent pixels in a column. Measured
-    in the inner fully-opaque region of the alpha mask so the feather
-    fringe doesn't dilute the effect."""
+def test_horizontal_squeeze_raises_row_variation_above_column_variation() -> None:
+    """Horizontal squeeze packs the same grain texture into a narrower
+    width and then mirror-tiles it — so adjacent pixels along a row sweep
+    through detail faster than adjacent pixels in a column. The ROI
+    interior should therefore show higher mean row-to-row delta than
+    column-to-column delta. Measured in the inner fully-opaque region of
+    the alpha mask so the feather fringe doesn't dilute the effect."""
     img = _grainy_image(seed=1)
     roi = (40, 40, 120, 120)
     out, _ = inject_grain_flattening(
@@ -98,7 +100,7 @@ def test_horizontal_smear_makes_row_variance_drop_more_than_column_variance() ->
     patch = out[70:130, 70:130].astype(np.int32)
     row_diff = float(np.abs(np.diff(patch, axis=1)).mean())
     col_diff = float(np.abs(np.diff(patch, axis=0)).mean())
-    assert row_diff < col_diff
+    assert row_diff > col_diff
 
 
 # ----------------------------------------------------------------- intensity
@@ -309,6 +311,166 @@ def test_rejects_4d_input() -> None:
 
 
 # --------------------------------------------------------------- feathering
+
+
+# ------------------------------------------------------- geometric squeeze
+
+
+def test_squeeze_preserves_high_frequency_detail() -> None:
+    """The whole point of the geometric squeeze: grain micro-detail must
+    survive. We measure high-frequency content with Laplacian variance —
+    a classic sharpness proxy. The squeezed ROI should keep at least 50 %
+    of the original's Laplacian variance. A pure Gaussian blur or motion
+    blur over the same patch would typically drop this below 20 %."""
+    img = _grainy_image(seed=3)
+    roi = (40, 40, 120, 120)
+    inside = (slice(70, 130), slice(70, 130))
+    original_lap_var = float(cv2.Laplacian(img[inside], cv2.CV_64F).var())
+
+    out, _ = inject_grain_flattening(
+        img, roi_box=roi, intensity=1.0, feather_fraction=0.0, seed=0,
+    )
+    squeezed_lap_var = float(cv2.Laplacian(out[inside], cv2.CV_64F).var())
+
+    assert squeezed_lap_var > original_lap_var * 0.5, (
+        f"high-frequency detail lost: original lap_var={original_lap_var:.1f}, "
+        f"squeezed lap_var={squeezed_lap_var:.1f}"
+    )
+
+
+def test_lanczos_squeeze_does_not_smear_a_strong_edge() -> None:
+    """A black-to-white step edge inside the ROI must stay a near-step
+    after squeezing. We check the transition width — the count of pixels
+    between the dark and bright extremes — stays small. A blur algorithm
+    would spread this across many pixels."""
+    img = np.zeros((120, 120), dtype=np.uint8)
+    img[:, 60:] = 255  # vertical step edge in the middle
+    roi = (20, 20, 80, 80)
+    out, _ = inject_grain_flattening(
+        img, roi_box=roi, intensity=0.5, feather_fraction=0.0,
+        flattening_direction="vertical",  # squeeze vertically — leaves the horizontal step in place
+        seed=0,
+    )
+    # Sample a single row through the ROI centre; count the transition
+    # band — pixels strictly between 30 and 225.
+    centre_row = out[60, 30:90]
+    transition_width = int(np.sum((centre_row > 30) & (centre_row < 225)))
+    assert transition_width <= 3, (
+        f"LANCZOS4 squeeze blurred the step edge across {transition_width} "
+        f"pixels; expected ≤ 3"
+    )
+
+
+def test_no_centre_mirror_butterfly_artifact() -> None:
+    """The previous mirror-tile algorithm produced a Rorschach-style
+    butterfly: the ROI's left half was a near-perfect reflection of its
+    right half. A downstream model would learn this in seconds. The new
+    wide-context squeeze must not reproduce that symmetry — compare the
+    left half of the ROI with its horizontally-flipped right half and
+    require a non-trivial mean absolute difference."""
+    img = _grainy_image(seed=5)
+    roi_x, roi_y, roi_w, roi_h = 60, 60, 120, 80
+    out, _ = inject_grain_flattening(
+        img, roi_box=(roi_x, roi_y, roi_w, roi_h),
+        intensity=1.0, feather_fraction=0.0, seed=0,
+    )
+    inside = out[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w].astype(np.int32)
+    half = roi_w // 2
+    left = inside[:, :half]
+    right_flipped = inside[:, -half:][:, ::-1]
+    mirror_diff = float(np.abs(left - right_flipped).mean())
+    # Pure mirror tiling drives this below ~1; natural asymmetric texture
+    # sits well above 5. We require > 4 as a safe floor.
+    assert mirror_diff > 4.0, (
+        f"left/right halves are mirror-symmetric (mean abs diff "
+        f"{mirror_diff:.2f}) — wide-context squeeze did not break symmetry"
+    )
+
+
+def test_wide_context_path_pulls_from_outside_the_roi() -> None:
+    """The wide-context squeeze should sample pixels from outside the
+    declared ROI when room is available. Easiest way to prove this:
+    plant a sharply distinct stripe IMMEDIATELY to the left of the ROI
+    (inside the wider context span the algorithm carves out at
+    intensity=1.0, which is ~3.3× the ROI width centred on the ROI), set
+    the ROI itself to a uniform mid-grey, and check the squeezed ROI now
+    contains the stripe's bright value — only possible via the wider
+    crop."""
+    img = np.full((100, 400), 128, dtype=np.uint8)
+    # ROI 60 px wide at x=220 → centre (220, 250). At ratio=0.3 the
+    # wide context span is ~200 px wide, balanced around the ROI centre:
+    # [150, 350]. Plant a bright stripe at [155, 215] — well inside the
+    # left half of that span but OUTSIDE the ROI.
+    img[:, 155:215] = 240
+    roi_box = (220, 20, 60, 60)
+    # Sanity: the ROI itself contains only the 128-grey base.
+    assert int(img[40, 250]) == 128
+    out, _ = inject_grain_flattening(
+        img, roi_box=roi_box, intensity=1.0, feather_fraction=0.0, seed=0,
+    )
+    inside = out[20:80, 220:280]
+    # Only the wide-context path can pull pixels from outside the ROI;
+    # a ROI-only crop is uniformly 128, so any pixel above 200 is proof
+    # the bright stripe was sampled.
+    assert int(inside.max()) > 200, (
+        f"wide-context path did not sample the off-ROI bright stripe "
+        f"(max inside={int(inside.max())}); algorithm likely fell back to "
+        f"wrap+roll on a context-rich source"
+    )
+
+
+# --------------------------------------------------------- op wrapper paths
+
+
+def test_grain_flattening_op_uses_source_image_when_provided() -> None:
+    """The synthesis op wrapper accepts ``_source_image`` / ``_roi_origin``
+    kwargs that Pipeline pushes when needs_source=True. With those args
+    the op pulls natural context from outside the cropped ROI — exactly
+    the path that used to fall back to the periodic-tile artefact under
+    fill_roi=True."""
+    from cvstudio.operations.synthesis import _grain_flattening_op  # noqa: PLC0415
+
+    source = np.full((100, 400), 128, dtype=np.uint8)
+    source[:, 155:215] = 240  # bright stripe outside the ROI
+    roi_origin = (220, 20)
+    crop = source[20:80, 220:280].copy()  # what Pipeline would hand the op
+
+    out = _grain_flattening_op(
+        crop,
+        angle_degrees=0.0,
+        intensity=1.0,
+        feather_fraction=0.0,
+        fill_roi=False,
+        seed=0,
+        _source_image=source,
+        _roi_origin=roi_origin,
+    )
+    assert out.shape == crop.shape
+    # Wide-context squeeze pulled the bright stripe into the ROI.
+    assert int(out.max()) > 200, (
+        f"op did not use _source_image — max inside ROI={int(out.max())}"
+    )
+
+
+def test_grain_flattening_op_falls_back_to_crop_when_source_missing() -> None:
+    """Backward compat: when ``_source_image`` is None the wrapper
+    behaves exactly like the standalone library call. Output must still
+    have the same shape and dtype as the input crop."""
+    from cvstudio.operations.synthesis import _grain_flattening_op  # noqa: PLC0415
+
+    crop = _grainy_image(h=80, w=80, seed=11)
+    out = _grain_flattening_op(
+        crop,
+        angle_degrees=0.0,
+        intensity=0.6,
+        feather_fraction=0.1,
+        fill_roi=True,
+        seed=0,
+    )
+    assert out.shape == crop.shape
+    assert out.dtype == crop.dtype
+    # And it actually did something.
+    assert not np.array_equal(out, crop)
 
 
 def test_smaller_feather_fraction_leaves_a_more_visible_seam() -> None:

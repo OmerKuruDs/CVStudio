@@ -697,16 +697,20 @@ class MainWindow(QMainWindow):
         ph, pw = self._preview_source.shape[:2]
         return pw / sw, ph / sh
 
-    def _pipeline_roi_in_preview_coords(self) -> tuple[int, int, int, int] | None:
+    def _pipeline_roi_in_preview_coords(
+        self,
+    ) -> tuple[int, int, int, int, float] | None:
         if self._pipeline.roi is None:
             return None
         sx, sy = self._preview_scale()
         roi = self._pipeline.roi
+        # Angle is scale-invariant — same degrees in preview and source coords.
         return (
             round(roi.x * sx),
             round(roi.y * sy),
             round(roi.width * sx),
             round(roi.height * sy),
+            roi.angle,
         )
 
     def _pipeline_paste_in_preview_coords(self) -> tuple[int, int] | None:
@@ -716,18 +720,20 @@ class MainWindow(QMainWindow):
         px, py = self._pipeline.roi_paste_to
         return round(px * sx), round(py * sy)
 
-    def _pipeline_paste_rect_in_preview_coords(self) -> tuple[int, int, int, int] | None:
-        """Return the (x, y, w, h) of the paste destination in preview coords,
-        suitable for the cyan overlay. None if no paste-to is set."""
+    def _pipeline_paste_rect_in_preview_coords(
+        self,
+    ) -> tuple[int, int, int, int, float] | None:
+        """Return the (x, y, w, h, angle) of the paste destination in preview
+        coords, suitable for the cyan overlay. None if no paste-to is set."""
         if self._pipeline.roi is None or self._pipeline.roi_paste_to is None:
             return None
         roi_preview = self._pipeline_roi_in_preview_coords()
         paste_xy = self._pipeline_paste_in_preview_coords()
         if roi_preview is None or paste_xy is None:
             return None
-        _x, _y, w, h = roi_preview
+        _x, _y, w, h, angle = roi_preview
         px, py = paste_xy
-        return px, py, w, h
+        return px, py, w, h, angle
 
     def _format_status(self, path: str) -> str:
         assert self._source_image is not None
@@ -741,10 +747,11 @@ class MainWindow(QMainWindow):
         self._downscale_enabled = enabled
         self._refresh_preview_source()
 
-    def _on_roi_drawn(self, x: int, y: int, w: int, h: int) -> None:
-        """User finished drawing a rectangle in ROI mode. Incoming coords are
-        in preview-source space; translate to full-source space before storing
-        so code export and pipeline.execute stay correct under downscaling."""
+    def _on_roi_drawn(self, x: int, y: int, w: int, h: int, angle: float) -> None:
+        """User finished drawing or rotating a rectangle in ROI mode. Incoming
+        coords are in preview-source space; translate to full-source space
+        before storing so code export and pipeline.execute stay correct under
+        downscaling. `angle` is scale-invariant — stored as-is."""
         sx, sy = self._preview_scale()
         if sx <= 0 or sy <= 0:
             return
@@ -752,13 +759,20 @@ class MainWindow(QMainWindow):
         fy = round(y / sy)
         fw = max(1, round(w / sx))
         fh = max(1, round(h / sy))
-        self._pipeline.roi = Roi(x=fx, y=fy, width=fw, height=fh)
+        self._pipeline.roi = Roi(x=fx, y=fy, width=fw, height=fh, angle=angle)
         # Re-sync the visual overlay from the canonical pipeline.roi so any
         # rounding stays consistent between preview and saved state.
         self._image_view.set_roi(self._pipeline_roi_in_preview_coords())
-        self.statusBar().showMessage(f"ROI set: {fw}x{fh} at ({fx}, {fy})")
-        # Exit ROI selection mode automatically — the user just placed one.
-        self._select_roi_action.setChecked(False)
+        # Only exit selection mode on the initial draw (angle==0) — during a
+        # live rotation drag we keep the mode unchanged so the handle stays
+        # responsive across consecutive emits.
+        if angle == 0.0:
+            self.statusBar().showMessage(f"ROI set: {fw}x{fh} at ({fx}, {fy})")
+            self._select_roi_action.setChecked(False)
+        else:
+            self.statusBar().showMessage(
+                f"ROI: {fw}x{fh} @ {angle:.0f}° at ({fx}, {fy})"
+            )
         self._request_preview()
 
     def _on_clear_roi(self) -> None:

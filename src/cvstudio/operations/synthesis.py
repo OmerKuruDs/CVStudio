@@ -17,6 +17,7 @@ import numpy as np
 
 from cvstudio.core.operation import OperationSpec, Parameter
 from cvstudio.defects.grain_flattening import inject_grain_flattening
+from cvstudio.defects.grain_stretching import inject_grain_stretching
 
 
 # --------------------------------------------------------------- boundary_extract
@@ -511,16 +512,39 @@ def _grain_flattening_op(
     feather_fraction: float,
     fill_roi: bool,
     seed: int,
+    _source_image: np.ndarray | None = None,
+    _roi_origin: tuple[int, int] | None = None,
 ) -> np.ndarray:
     """Pipeline wrapper around ``cvstudio.defects.inject_grain_flattening``.
 
     Drops the label tuple — the pipeline contract is a single ndarray. Use
     the library function directly when you need the YOLO label metadata.
 
-    When ``fill_roi`` is True the entire input is treated as the defect
-    region; combine with cvstudio's mouse-drawn pipeline ROI to flatten
-    exactly the area you painted. When False the op picks its own sub-ROI
-    centred on a Canny edge pixel — useful for full-image previews."""
+    Two execution modes:
+        * Under a Pipeline ROI: ``Graph.execute`` (because this spec sets
+          ``needs_source=True``) passes ``_source_image`` and
+          ``_roi_origin``. We run the injector on the FULL source so the
+          wide-context squeeze can pull natural texture from outside the
+          ROI, then slice the ROI region out of the result for Pipeline to
+          splice back. This is the path that avoids the tile/butterfly
+          artefact a ROI-only crop would otherwise force.
+        * Standalone (no Pipeline ROI, or ``_source_image is None``): fall
+          back to the historical behaviour — run on the cropped input,
+          honouring the user's ``fill_roi`` toggle for sub-ROI sampling.
+    """
+    if _source_image is not None and _roi_origin is not None:
+        x0, y0 = _roi_origin
+        h_crop, w_crop = image.shape[:2]
+        out_full, _ = inject_grain_flattening(
+            _source_image,
+            roi_box=(x0, y0, w_crop, h_crop),
+            angle_degrees=float(angle_degrees),
+            intensity=float(intensity),
+            feather_fraction=float(feather_fraction),
+            fill_roi=False,
+            seed=int(seed),
+        )
+        return out_full[y0 : y0 + h_crop, x0 : x0 + w_crop]
     out, _ = inject_grain_flattening(
         image,
         angle_degrees=float(angle_degrees),
@@ -559,12 +583,18 @@ GRAIN_FLATTENING = OperationSpec(
     name="Grain Flattening",
     category="Synthesis",
     description=(
-        "Inject a synthetic grain-flattening defect — directional motion "
-        "blur + morph close + local contrast drop, feathered so there is no "
-        "boxy seam. Draw a pipeline ROI on the image (toolbar → Select ROI) "
-        "and keep 'Fill ROI' on to flatten exactly that region; turn it off "
-        "to let the op auto-pick a small sub-ROI on a Canny edge. Angle is a "
-        "free 0°–180° slider, not just horizontal/vertical."
+        "Inject a synthetic grain-flattening defect by geometrically "
+        "compressing the texture along one axis with LANCZOS4 "
+        "resampling. The squeezed content is pulled from a wider strip of "
+        "natural texture around the ROI so the result has no mirror or "
+        "tile symmetry — a downstream model can't latch onto a "
+        "butterfly-pattern artefact. When the ROI hugs the image edge "
+        "(or 'Fill ROI' is on), the op falls back to a periodic tile "
+        "with a random phase roll. Grain micro-detail stays sharp — the "
+        "squeeze moves pixels rather than blurring them. Draw a pipeline "
+        "ROI (toolbar → Select ROI) and keep 'Fill ROI' on to flatten "
+        "exactly that region; turn it off to let the op auto-pick a "
+        "small sub-ROI on a Canny edge. Angle is a free 0°–180° slider."
     ),
     parameters=(
         Parameter(
@@ -575,7 +605,10 @@ GRAIN_FLATTENING = OperationSpec(
         Parameter(
             name="intensity", kind="float", default=0.5, min=0.0, max=1.0, step=0.05,
             label="Intensity",
-            description="Severity — drives motion-blur kernel size and contrast drop.",
+            description=(
+                "Squeeze ratio. 0 = no-op (identity), 0.5 = 35 % narrower, "
+                "1.0 = 70 % narrower (mirror-tile fills the rest)."
+            ),
         ),
         Parameter(
             name="feather_fraction", kind="float", default=0.3, min=0.0, max=0.5, step=0.05,
@@ -598,6 +631,129 @@ GRAIN_FLATTENING = OperationSpec(
     ),
     func=_grain_flattening_op,
     code_export=_grain_flattening_op_code,
+    needs_source=True,
+)
+
+
+# --------------------------------------------------------------- grain_stretching
+
+
+def _grain_stretching_op(
+    image: np.ndarray,
+    angle_degrees: float,
+    intensity: float,
+    feather_fraction: float,
+    fill_roi: bool,
+    seed: int,
+    _source_image: np.ndarray | None = None,
+    _roi_origin: tuple[int, int] | None = None,
+) -> np.ndarray:
+    """Pipeline wrapper around ``cvstudio.defects.inject_grain_stretching``.
+
+    Mirror of ``_grain_flattening_op``: under a Pipeline ROI we receive
+    the full source via ``_source_image`` / ``_roi_origin`` (because the
+    spec sets ``needs_source=True``), run the injector against the full
+    source, and slice the ROI region back out for Pipeline to splice.
+    Standalone calls fall back to behaving exactly like the library
+    function on the cropped input.
+    """
+    if _source_image is not None and _roi_origin is not None:
+        x0, y0 = _roi_origin
+        h_crop, w_crop = image.shape[:2]
+        out_full, _ = inject_grain_stretching(
+            _source_image,
+            roi_box=(x0, y0, w_crop, h_crop),
+            angle_degrees=float(angle_degrees),
+            intensity=float(intensity),
+            feather_fraction=float(feather_fraction),
+            fill_roi=False,
+            seed=int(seed),
+        )
+        return out_full[y0 : y0 + h_crop, x0 : x0 + w_crop]
+    out, _ = inject_grain_stretching(
+        image,
+        angle_degrees=float(angle_degrees),
+        intensity=float(intensity),
+        feather_fraction=float(feather_fraction),
+        fill_roi=bool(fill_roi),
+        seed=int(seed),
+    )
+    return out
+
+
+def _grain_stretching_op_code(
+    params: dict[str, Any], input_vars: tuple[str, ...], output_var: str
+) -> list[str]:
+    (image,) = input_vars
+    angle = float(params["angle_degrees"])
+    intensity = float(params["intensity"])
+    feather = float(params["feather_fraction"])
+    fill = bool(params["fill_roi"])
+    seed = int(params["seed"])
+    return [
+        "from cvstudio.defects import inject_grain_stretching",
+        f"{output_var}, _label = inject_grain_stretching(",
+        f"    {image},",
+        f"    angle_degrees={angle},",
+        f"    intensity={intensity},",
+        f"    feather_fraction={feather},",
+        f"    fill_roi={fill},",
+        f"    seed={seed},",
+        ")",
+    ]
+
+
+GRAIN_STRETCHING = OperationSpec(
+    id="synthesis.grain_stretching",
+    name="Grain Stretching",
+    category="Synthesis",
+    description=(
+        "Inject a synthetic grain-stretching defect — the geometric "
+        "inverse of grain flattening. Pulls a NARROWER strip of natural "
+        "texture from around the ROI and resamples it up to ROI width "
+        "with LANCZOS4 so pixels widen along the selected axis. Grain "
+        "micro-detail stays sharp (LANCZOS4 doesn't soften under "
+        "upsampling). Draw a pipeline ROI (toolbar → Select ROI) and "
+        "keep 'Fill ROI' on to stretch exactly that region; turn it off "
+        "to let the op auto-pick a small sub-ROI on a Canny edge. Angle "
+        "is a free 0°–180° slider; intensity 0 = no-op, 1 ≈ 3.3× wider."
+    ),
+    parameters=(
+        Parameter(
+            name="angle_degrees", kind="float", default=0.0, min=0.0, max=180.0, step=1.0,
+            label="Angle (°)",
+            description="Stretch axis. 0° = horizontal, 90° = vertical, anything else = diagonal.",
+        ),
+        Parameter(
+            name="intensity", kind="float", default=0.5, min=0.0, max=1.0, step=0.05,
+            label="Intensity",
+            description=(
+                "Stretch ratio. 0 = no-op (identity), 0.5 ≈ 1.5× wider, "
+                "1.0 ≈ 3.3× wider (narrow source crop resampled up)."
+            ),
+        ),
+        Parameter(
+            name="feather_fraction", kind="float", default=0.3, min=0.0, max=0.5, step=0.05,
+            label="Feather",
+            description="Share of each ROI side that fades into the surround.",
+        ),
+        Parameter(
+            name="fill_roi", kind="bool", default=True,
+            label="Fill ROI",
+            description=(
+                "ON = stretch the entire input (pair with a mouse-drawn "
+                "pipeline ROI). OFF = auto-pick a sub-ROI on a Canny edge."
+            ),
+        ),
+        Parameter(
+            name="seed", kind="int", default=0, min=0, max=999999, step=1,
+            label="Seed",
+            description="RNG seed — only consulted when Fill ROI is OFF (auto-ROI sampler).",
+        ),
+    ),
+    func=_grain_stretching_op,
+    code_export=_grain_stretching_op_code,
+    needs_source=True,
 )
 
 
@@ -608,4 +764,5 @@ ALL: tuple[OperationSpec, ...] = (
     COPY_PASTE_DEFECT,
     PERLIN_NOISE_OVERLAY,
     GRAIN_FLATTENING,
+    GRAIN_STRETCHING,
 )

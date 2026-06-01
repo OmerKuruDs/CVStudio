@@ -86,6 +86,17 @@ class OperationSpec:
     the parameter panel). Used by expensive ops like VLM queries where
     each invocation costs seconds and external resources."""
 
+    needs_source: bool = False
+    """When True under a Pipeline ROI workflow, ``Graph.execute`` passes
+    the original pre-crop source image and the ROI's top-left origin to
+    ``func`` as ``_source_image`` and ``_roi_origin`` kwargs (in addition
+    to the normal positional inputs and declared ``parameters``). The op
+    MUST still return a result that fits the ROI crop — Pipeline splices
+    it back into the ROI region. Default False: ordinary ops never see
+    those kwargs and don't have to declare them. Set this only for ops
+    that genuinely need wider context than the ROI provides (e.g. grain
+    flattening's wide-source squeeze)."""
+
     def __post_init__(self) -> None:
         if not self.id or "." not in self.id:
             raise ValueError(

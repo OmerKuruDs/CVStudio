@@ -224,6 +224,7 @@ def _drag_roi(view: ImageViewWidget, start: tuple[int, int], end: tuple[int, int
         int(clipped.y()),
         int(clipped.width()),
         int(clipped.height()),
+        0.0,
     )
     view.set_roi(roi)
     view.roi_changed.emit(*roi)
@@ -235,13 +236,13 @@ def test_roi_mode_off_by_default(view: ImageViewWidget) -> None:
 
 def test_setting_roi_stores_and_can_be_read_back(view: ImageViewWidget) -> None:
     view.set_image(_rgb())
-    view.set_roi((10, 20, 30, 40))
-    assert view.roi() == (10, 20, 30, 40)
+    view.set_roi((10, 20, 30, 40, 0.0))
+    assert view.roi() == (10, 20, 30, 40, 0.0)
 
 
 def test_clearing_roi_removes_overlay(view: ImageViewWidget) -> None:
     view.set_image(_rgb())
-    view.set_roi((10, 20, 30, 40))
+    view.set_roi((10, 20, 30, 40, 0.0))
     assert view._roi_item is not None
     view.set_roi(None)
     assert view._roi is None
@@ -251,7 +252,7 @@ def test_clearing_roi_removes_overlay(view: ImageViewWidget) -> None:
 def test_set_image_repaints_roi_overlay(view: ImageViewWidget) -> None:
     """Scene.clear() during set_image must not orphan the ROI overlay."""
     view.set_image(_rgb())
-    view.set_roi((5, 5, 20, 20))
+    view.set_roi((5, 5, 20, 20, 0.0))
     # Now swap the image — overlay must still be present afterwards.
     view.set_image(_rgb())
     assert view._roi_item is not None
@@ -259,20 +260,22 @@ def test_set_image_repaints_roi_overlay(view: ImageViewWidget) -> None:
 
 def test_drag_emits_roi_changed_signal(view: ImageViewWidget, qapp: QApplication) -> None:
     view.set_image(_rgb(w=200, h=100))
-    received: list[tuple[int, int, int, int]] = []
-    view.roi_changed.connect(lambda x, y, w, h: received.append((x, y, w, h)))
+    received: list[tuple[int, int, int, int, float]] = []
+    view.roi_changed.connect(
+        lambda x, y, w, h, a: received.append((x, y, w, h, a))
+    )
 
     _drag_roi(view, start=(20, 10), end=(80, 60))
     qapp.processEvents()
-    assert received == [(20, 10, 60, 50)]
-    assert view.roi() == (20, 10, 60, 50)
+    assert received == [(20, 10, 60, 50, 0.0)]
+    assert view.roi() == (20, 10, 60, 50, 0.0)
 
 
 def test_drag_outside_image_is_clipped_to_bounds(view: ImageViewWidget) -> None:
     view.set_image(_rgb(w=200, h=100))
     _drag_roi(view, start=(-50, -50), end=(250, 150))
     # Drag should clip to the full image extent.
-    assert view.roi() == (0, 0, 200, 100)
+    assert view.roi() == (0, 0, 200, 100, 0.0)
 
 
 def test_tiny_drag_does_not_set_roi(view: ImageViewWidget) -> None:
@@ -307,11 +310,11 @@ def _drag_destination(view: ImageViewWidget, dx: int, dy: int) -> None:
     the existing ROI as grab point, then simulates a mouse move of (dx, dy)
     scene units."""
     assert view._roi is not None
-    rx, ry, rw, rh = view._roi
+    rx, ry, rw, rh, angle = view._roi
     cx, cy = rx + rw / 2, ry + rh / 2
     view._dest_grab_offset = (cx - rx, cy - ry)
     view._dragging_destination = True
-    view.set_paste_rect((rx, ry, rw, rh))
+    view.set_paste_rect((rx, ry, rw, rh, angle))
 
     new_scene_x = cx + dx
     new_scene_y = cy + dy
@@ -321,7 +324,7 @@ def _drag_destination(view: ImageViewWidget, dx: int, dy: int) -> None:
         iw, ih = view._image_size
         new_x = max(0, min(iw - rw, new_x))
         new_y = max(0, min(ih - rh, new_y))
-    rect = (int(new_x), int(new_y), rw, rh)
+    rect = (int(new_x), int(new_y), rw, rh, angle)
     view.set_paste_rect(rect)
     view.paste_destination_changed.emit(int(new_x), int(new_y))
     view._dragging_destination = False
@@ -332,7 +335,7 @@ def test_drag_inside_roi_emits_paste_destination_signal(
     view: ImageViewWidget, qapp: QApplication
 ) -> None:
     view.set_image(_rgb(w=300, h=200))
-    view.set_roi((10, 10, 50, 50))
+    view.set_roi((10, 10, 50, 50, 0.0))
     received: list[tuple[int, int]] = []
     view.paste_destination_changed.connect(lambda x, y: received.append((x, y)))
 
@@ -346,26 +349,26 @@ def test_drag_does_not_move_source_roi(view: ImageViewWidget) -> None:
     """Dragging the green ROI's interior must NOT change the source rectangle —
     only the cyan destination overlay should follow the cursor."""
     view.set_image(_rgb(w=300, h=200))
-    view.set_roi((10, 10, 50, 50))
+    view.set_roi((10, 10, 50, 50, 0.0))
     _drag_destination(view, dx=40, dy=30)
-    assert view.roi() == (10, 10, 50, 50)
-    assert view._paste_rect == (50, 40, 50, 50)
+    assert view.roi() == (10, 10, 50, 50, 0.0)
+    assert view._paste_rect == (50, 40, 50, 50, 0.0)
 
 
 def test_drag_destination_clamps_inside_image_bounds(view: ImageViewWidget) -> None:
     view.set_image(_rgb(w=200, h=100))
-    view.set_roi((10, 10, 30, 30))
+    view.set_roi((10, 10, 30, 30, 0.0))
     _drag_destination(view, dx=500, dy=500)
     rect = view._paste_rect
     assert rect is not None
-    x, y, w, h = rect
+    x, y, w, h, _angle = rect
     assert x + w <= 200
     assert y + h <= 100
 
 
 def test_hover_inside_roi_shows_size_all_cursor(view: ImageViewWidget) -> None:
     view.set_image(_rgb(w=200, h=100))
-    view.set_roi((10, 10, 40, 40))
+    view.set_roi((10, 10, 40, 40, 0.0))
     # Build a viewport point that lies inside the ROI on screen. Map the centre
     # of the ROI back from scene → viewport so we cope with any zoom/transform.
     from PySide6.QtCore import QPointF as _QPointF
@@ -378,7 +381,7 @@ def test_hover_inside_roi_shows_size_all_cursor(view: ImageViewWidget) -> None:
 def test_split_mode_hides_roi_overlay(view: ImageViewWidget) -> None:
     view.set_before(_solid((0, 0, 0)))
     view.set_image(_solid((200, 200, 200)))
-    view.set_roi((10, 10, 30, 30))
+    view.set_roi((10, 10, 30, 30, 0.0))
     assert view._roi_item is not None
     view.set_split_enabled(True)
     # In split mode the composite has different coordinates — overlay is suppressed.

@@ -152,11 +152,47 @@ def test_roi_round_trips_through_to_dict_and_from_dict() -> None:
     original.roi = Roi(x=10, y=20, width=30, height=40)
 
     payload = to_dict(original)
-    assert payload["roi"] == {"x": 10, "y": 20, "width": 30, "height": 40}
+    assert payload["roi"] == {
+        "x": 10,
+        "y": 20,
+        "width": 30,
+        "height": 40,
+        "angle": 0.0,
+    }
 
     restored = Pipeline()
     from_dict(payload, restored)
     assert restored.roi == Roi(x=10, y=20, width=30, height=40)
+
+
+def test_roi_with_angle_round_trips() -> None:
+    """Non-zero rotation must survive to_dict → from_dict losslessly."""
+    original = Pipeline()
+    original.add(ADD, {"value": 5})
+    original.roi = Roi(x=10, y=20, width=30, height=40, angle=37.5)
+
+    payload = to_dict(original)
+    assert payload["roi"]["angle"] == 37.5
+
+    restored = Pipeline()
+    from_dict(payload, restored)
+    assert restored.roi is not None
+    assert restored.roi.angle == 37.5
+    assert restored.roi == Roi(x=10, y=20, width=30, height=40, angle=37.5)
+
+
+def test_legacy_roi_without_angle_field_loads_as_zero() -> None:
+    """An older v2 JSON (saved before this feature) has no `angle` key — it
+    must load as angle=0 without raising."""
+    legacy_payload = {
+        "version": 2,
+        "nodes": [],
+        "edges": [],
+        "roi": {"x": 4, "y": 5, "width": 6, "height": 7},
+    }
+    restored = Pipeline()
+    from_dict(legacy_payload, restored)
+    assert restored.roi == Roi(x=4, y=5, width=6, height=7, angle=0.0)
 
 
 def test_missing_roi_key_loads_as_none() -> None:

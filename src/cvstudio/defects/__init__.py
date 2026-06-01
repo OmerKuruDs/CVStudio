@@ -12,5 +12,14 @@ from cvstudio.defects.grain_flattening import (
     GrainFlatteningLabel,
     inject_grain_flattening,
 )
+from cvstudio.defects.grain_stretching import (
+    GrainStretchingLabel,
+    inject_grain_stretching,
+)
 
-__all__ = ["GrainFlatteningLabel", "inject_grain_flattening"]
+__all__ = [
+    "GrainFlatteningLabel",
+    "GrainStretchingLabel",
+    "inject_grain_flattening",
+    "inject_grain_stretching",
+]

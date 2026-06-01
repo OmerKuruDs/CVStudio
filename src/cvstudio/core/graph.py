@@ -173,6 +173,8 @@ class Graph:
         image: np.ndarray,
         *,
         on_step_timed: Callable[[NodeId, float], None] | None = None,
+        source_image: np.ndarray | None = None,
+        roi_origin: tuple[int, int] | None = None,
     ) -> np.ndarray:
         """Run the graph and return the terminal node's first output.
 
@@ -180,6 +182,12 @@ class Graph:
         and the wall-clock seconds its ``func`` consumed. Disabled and
         source-style nodes are skipped — the hook is only called for nodes
         whose ``func`` actually ran. Useful for per-node timing HUDs.
+
+        ``source_image`` and ``roi_origin`` are forwarded only to nodes
+        whose spec declares ``needs_source=True`` — see ``OperationSpec``.
+        Pipeline sets them when executing under a ROI; standalone
+        ``Graph.execute`` calls can ignore them and the value is None
+        downstream, which makes the op fall back to its non-source path.
         """
         if not self._nodes:
             return image.copy()
@@ -215,7 +223,17 @@ class Graph:
             streaming.set_current_node(nid)
             t0 = time.perf_counter()
             try:
-                result = node.call(*input_args)
+                if node.spec.needs_source and source_image is not None:
+                    # Inject Pipeline-level context as kwargs alongside the
+                    # declared params. Ops opt in via spec.needs_source so
+                    # ordinary ops never see (and never have to declare)
+                    # these reserved kwarg names.
+                    call_kwargs = dict(node.params)
+                    call_kwargs["_source_image"] = source_image
+                    call_kwargs["_roi_origin"] = roi_origin
+                    result = node.spec.func(*input_args, **call_kwargs)
+                else:
+                    result = node.call(*input_args)
             finally:
                 streaming.set_current_node(None)
             if on_step_timed is not None:

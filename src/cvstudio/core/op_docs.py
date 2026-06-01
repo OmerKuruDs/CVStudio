@@ -1786,6 +1786,46 @@ YOLO-normalised bbox you write to the <code>.txt</code> annotation file.
 The UI op here drops the label since the pipeline contract is a single
 ndarray.</p>
 """,
+    "synthesis.grain_stretching": """
+<h2>Grain Stretching</h2>
+<p><i>synthesis.grain_stretching · category: Synthesis · stochastic</i></p>
+<p>The geometric inverse of Grain Flattening: pulls a narrower strip of
+natural texture from around the ROI and resamples it up to ROI width
+with LANCZOS4, so pixels widen along the selected axis. Grain
+micro-detail (boundaries, roughness, contrast edges) stays sharp because
+LANCZOS4 does not soften high-frequency content under upsampling. A
+feathered alpha blend dissolves the ROI edge so the result reads as
+natural rather than a pasted square.</p>
+<h3>Parameters</h3>
+<ul>
+  <li><b>Angle (°)</b> — stretch axis. 0° = horizontal, 90° = vertical,
+      anything in between = diagonal.</li>
+  <li><b>Intensity</b> — [0.0 .. 1.0]. Maps to stretch ratio:
+      0 = no-op, 0.5 ≈ 1.5× wider, 1.0 ≈ 3.3× wider.</li>
+  <li><b>Feather</b> — [0.0 .. 0.5]: share of each ROI side that fades
+      into the surround. Larger = softer transition.</li>
+  <li><b>Fill ROI</b> — ON treats the whole input as the defect region
+      (pair with a mouse-drawn pipeline ROI). OFF lets the op auto-pick a
+      sub-ROI on a Canny edge.</li>
+  <li><b>Seed</b> — RNG seed for the auto-ROI sampler. Same seed = same
+      ROI = same output.</li>
+</ul>
+<h3>Where it shines</h3>
+<ul>
+  <li>Industrial-CV training data augmentation — generate stretched-grain
+      defect samples alongside the squeeze-grain set from Grain Flattening
+      so the model sees both deformation modes.</li>
+  <li>Quick interactive A/B with Grain Flattening to study how a model
+      reacts to opposite-direction deformation.</li>
+</ul>
+<h3>For dataset generation</h3>
+<p>Call <code>cvstudio.defects.inject_grain_stretching</code> directly
+from a script — the library function returns
+<code>(image, GrainStretchingLabel)</code> where the label carries the
+YOLO-normalised bbox you write to the <code>.txt</code> annotation file.
+The UI op here drops the label since the pipeline contract is a single
+ndarray.</p>
+""",
     "synthesis.perlin_noise_overlay": """
 <h2>Perlin Noise Overlay</h2>
 <p><i>synthesis.perlin_noise_overlay · category: Synthesis · stochastic</i></p>

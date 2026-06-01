@@ -78,6 +78,7 @@ def to_dict(pipeline: Pipeline) -> dict[str, Any]:
             "y": pipeline.roi.y,
             "width": pipeline.roi.width,
             "height": pipeline.roi.height,
+            "angle": pipeline.roi.angle,
         }
     if pipeline.roi_paste_to is not None:
         payload["roi_paste_to"] = list(pipeline.roi_paste_to)
@@ -214,11 +215,14 @@ def _load_v2(data: dict[str, Any], into: Pipeline) -> None:
 def _parse_roi(data: dict[str, Any]) -> Roi | None:
     if "roi" in data and data["roi"] is not None:
         raw_roi = data["roi"]
+        # `angle` was added later — older v1/v2 files omit it. Default to 0.0
+        # so legacy projects round-trip identically.
         return Roi(
             x=int(raw_roi["x"]),
             y=int(raw_roi["y"]),
             width=int(raw_roi["width"]),
             height=int(raw_roi["height"]),
+            angle=float(raw_roi.get("angle", 0.0)),
         )
     return None
 

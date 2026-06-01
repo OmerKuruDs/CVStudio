@@ -111,6 +111,10 @@ class Roi:
     y: int
     width: int
     height: int
+    angle: float = 0.0
+    """Rotation in degrees, counter-clockwise positive, around the rect's
+    centre `(x + width/2, y + height/2)`. `angle == 0` keeps the legacy
+    axis-aligned crop/paste fast path in `Pipeline.execute`."""
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
@@ -120,7 +124,11 @@ class Roi:
 
     def clipped_to(self, shape: tuple[int, ...]) -> Roi | None:
         """Return a copy clipped to the image's H,W bounds, or None if the
-        intersection is empty."""
+        intersection is empty. When the ROI is rotated (`angle != 0`),
+        axis-aligned clipping is meaningless — return `self` unchanged so the
+        rotated execute path can do its own bounds handling via warp borders."""
+        if self.angle != 0.0:
+            return self
         h_img, w_img = shape[:2]
         x0 = max(0, min(w_img, self.x))
         y0 = max(0, min(h_img, self.y))
@@ -296,6 +304,9 @@ class Pipeline:
         if self.roi is None:
             return self._graph.execute(image.copy(), on_step_timed=on_step_timed)
 
+        if self.roi.angle != 0.0:
+            return self._execute_rotated_roi(image, on_step_timed=on_step_timed)
+
         clipped = self.roi.clipped_to(image.shape)
         if clipped is None:
             return image.copy()
@@ -304,7 +315,16 @@ class Pipeline:
             clipped.y : clipped.y + clipped.height,
             clipped.x : clipped.x + clipped.width,
         ].copy()
-        processed = self._graph.execute(crop, on_step_timed=on_step_timed)
+        # Forward the full source image and ROI origin so any node with
+        # `OperationSpec.needs_source=True` (e.g. grain flattening) can
+        # pull natural context from outside the ROI instead of inventing
+        # synthetic tile fills. Ordinary nodes ignore these kwargs.
+        processed = self._graph.execute(
+            crop,
+            on_step_timed=on_step_timed,
+            source_image=image,
+            roi_origin=(clipped.x, clipped.y),
+        )
         processed = coerce_to_match(processed, image)
 
         dst_x, dst_y = (
@@ -318,6 +338,89 @@ class Pipeline:
             patch, (px, py) = paste
             ph, pw = patch.shape[:2]
             result[py : py + ph, px : px + pw] = patch
+        except (ValueError, TypeError):
+            return image.copy()
+        return result
+
+    def _execute_rotated_roi(
+        self,
+        image: np.ndarray,
+        *,
+        on_step_timed: Callable[[NodeId, float], None] | None,
+    ) -> np.ndarray:
+        """Rotated-rectangle ROI: warpAffine-extract the rotated rect into an
+        axis-aligned `(width, height)` buffer, run the graph on it, then
+        inverse-warp the result back into the full canvas using a same-shape
+        mask so only the rotated quad is overwritten."""
+        roi = self.roi
+        assert roi is not None and roi.angle != 0.0
+        cx = roi.x + roi.width / 2.0
+        cy = roi.y + roi.height / 2.0
+        # Extract: rotate by -angle around the rect centre, then shift so the
+        # rect's centre lands at (width/2, height/2) inside the crop buffer.
+        m_extract = cv2.getRotationMatrix2D((cx, cy), -roi.angle, 1.0)
+        m_extract[0, 2] += roi.width / 2.0 - cx
+        m_extract[1, 2] += roi.height / 2.0 - cy
+        crop = cv2.warpAffine(
+            image,
+            m_extract,
+            (roi.width, roi.height),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT,
+        )
+        processed = self._graph.execute(crop, on_step_timed=on_step_timed)
+        # A shape-changing op breaks our mask-based splice (mask is built for
+        # the original (h, w) — a smaller processed patch warps into a tiny
+        # rotated quad and leaves garbage under the rest of the mask). Match
+        # the axis-aligned path's contract: return a clean copy instead.
+        if processed.shape[:2] != (roi.height, roi.width):
+            return image.copy()
+        try:
+            processed = coerce_to_match(processed, image)
+        except (ValueError, TypeError):
+            return image.copy()
+
+        # Splice: same rotation, but pivot at the destination centre.
+        if self.roi_paste_to is not None:
+            paste_cx = self.roi_paste_to[0] + roi.width / 2.0
+            paste_cy = self.roi_paste_to[1] + roi.height / 2.0
+        else:
+            paste_cx, paste_cy = cx, cy
+        m_splice = cv2.getRotationMatrix2D(
+            (roi.width / 2.0, roi.height / 2.0), roi.angle, 1.0
+        )
+        m_splice[0, 2] += paste_cx - roi.width / 2.0
+        m_splice[1, 2] += paste_cy - roi.height / 2.0
+        ih, iw = image.shape[:2]
+        try:
+            warped = cv2.warpAffine(
+                processed,
+                m_splice,
+                (iw, ih),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0,
+            )
+            mask = cv2.warpAffine(
+                np.full((roi.height, roi.width), 255, dtype=np.uint8),
+                m_splice,
+                (iw, ih),
+                flags=cv2.INTER_NEAREST,
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=0,
+            )
+        except cv2.error:
+            return image.copy()
+
+        result = image.copy()
+        if result.ndim == 2:
+            cond = mask > 0
+        else:
+            cond = np.broadcast_to(
+                (mask > 0)[:, :, None], result.shape
+            )
+        try:
+            np.copyto(result, warped, where=cond)
         except (ValueError, TypeError):
             return image.copy()
         return result
